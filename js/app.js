@@ -343,7 +343,10 @@ window.createNode = function(type) {
         hasIn = true; hasOut = true; title = "PROMPT STACK";
         content = `
             <select id="stack_plat_${id}" onchange="triggerUpdate()" style="width:100%; margin-bottom:5px; background:#111; color:#eee; border:1px solid #333; padding:5px; border-radius:4px; font-size:0.75rem; font-weight:bold;">
-                <option value="cinematic">🎬 Cinematic (Sora/Runway)</option>
+                <option value="runway">🎬 Runway Gen-3/4 (Cinematic)</option>
+                <option value="kling">🐉 Kling (High Motion / Audio)</option>
+                <option value="veo">🎥 Google Veo (Realism)</option>
+                <option value="luma">✨ Luma Dream Machine (Dynamic)</option>
                 <option value="midjourney">🚀 Midjourney (Tags)</option>
             </select>
             <textarea id="val_${id}" class="stack-output" readonly></textarea>

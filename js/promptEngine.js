@@ -60,8 +60,15 @@ function updateStack(sid, nodes, cables) {
 
     let prompt = "";
 
-    if (platform === 'cinematic') {
-        let sentences = [];
+    if (platform === 'runway' || platform === 'kling' || platform === 'veo' || platform === 'luma') {
+        let compShot = "", compSubj = "", compAct = "", compEnv = "", compCam = "", compLit = "", compSty = "", compAudio = "";
+
+        if (shotObj || moveObj) {
+            let sType = shotObj ? document.getElementById(`shot_type_${shotObj.id}`).value.split(' (')[0] : "medium shot";
+            let sMove = moveObj ? document.getElementById(`cam_move_${moveObj.id}`).value : "static camera";
+            compShot = `${sType.toLowerCase()}, ${sMove.toLowerCase()}`;
+        }
+
         if (sceneObj) {
             const id = sceneObj.id;
             const loc = document.getElementById(`scn_loc_${id}`).value;
@@ -70,18 +77,21 @@ function updateStack(sid, nodes, cables) {
             const wea = document.getElementById(`scn_wea_${id}`).value;
             const mood = document.getElementById(`scn_mood_${id}`).value;
             
-            let sceneStr = `A cinematic shot of a ${loc.toLowerCase().replace('interior: ', '').replace('exterior: ', '')}`;
-            if (cust) sceneStr += ` with ${cust}`;
-            sceneStr += `, set during ${time.split(' ')[0].toLowerCase()}`;
-            if (wea !== 'Clear') sceneStr += ` under ${wea.toLowerCase()} weather conditions`;
-            sceneStr += `. The overall mood is ${mood.toLowerCase()}.`;
-            sentences.push(sceneStr);
+            compEnv = `set in a ${loc.toLowerCase().replace('interior: ', '').replace('exterior: ', '')}`;
+            if (cust) compEnv += ` with ${cust}`;
+            compEnv += ` during ${time.split(' ')[0].toLowerCase()}`;
+            if (wea !== 'Clear') {
+                compEnv += ` under ${wea.toLowerCase()} weather`;
+                if(wea.includes('Rain') || wea.includes('Storm')) compAudio += "sound of heavy rain and distant thunder, ";
+            }
+            compLit += `The overall mood is ${mood.toLowerCase()}. `;
         }
 
         if (charObjs.length > 0) {
+            let sArr = [], aArr = [];
             charObjs.forEach(c => {
                 const id = c.id;
-                const cname = document.getElementById(`chr_name_${id}`).value || "A character";
+                const cname = document.getElementById(`chr_name_${id}`).value || "A person";
                 const age = document.getElementById(`chr_age_${id}`).value.split(' ')[0].toLowerCase();
                 const bld = document.getElementById(`chr_bld_${id}`).value.split(' ')[0].toLowerCase();
                 const clo = document.getElementById(`chr_clo_${id}`).value.toLowerCase();
@@ -89,22 +99,22 @@ function updateStack(sid, nodes, cables) {
                 const pos = document.getElementById(`chr_pos_${id}`).value.toLowerCase();
                 const actEl = document.getElementById(`chr_act_${id}`);
                 const act = actEl ? actEl.value.split(': ').pop().toLowerCase() : "";
-                const spat = formatSpatial(id);
                 
-                let s = `${cname}, a ${bld} ${age}, is positioned ${spat}. They are wearing ${clo} and are ${pos}`;
-                if (act) s += `, engaged in ${act}`;
-                s += `, showing expressions of ${emo}.`;
-                sentences.push(s);
+                let s = `${cname}, a ${bld} ${age}, wearing ${clo}, positioned ${formatSpatial(id)}, showing expressions of ${emo}`;
+                sArr.push(s);
+                
+                if (act) {
+                    aArr.push(`${cname} is actively ${act}`);
+                    if(act.includes('Argument') || act.includes('Dialog')) compAudio += "muffled speaking voices, ";
+                    if(act.includes('Chase') || act.includes('Running')) compAudio += "heavy footsteps, fast breathing, ";
+                } else if (pos) {
+                    aArr.push(`${cname} is ${pos}`);
+                }
             });
-        }
-
-        if (objectObjs.length > 0) {
-            let objStrs = objectObjs.map(o => {
-                const val = document.getElementById(`val_${o.id}`).value || "An object";
-                const spat = formatSpatial(o.id);
-                return `${val} is visible ${spat}`;
-            });
-            sentences.push(objStrs.join('. ') + '.');
+            compSubj = sArr.join(' and ');
+            compAct = aArr.join(' while ');
+        } else if (objectObjs.length > 0) {
+            compSubj = objectObjs.map(o => document.getElementById(`val_${o.id}`).value).join(' and ');
         }
 
         if (lightObjs.length > 0) {
@@ -119,85 +129,99 @@ function updateStack(sid, nodes, cables) {
                     let s = `illuminated by a ${w}W ${b} studio light`;
                     if(mod && mod !== 'Bare Bulb') s += ` with a ${mod.toLowerCase()}`;
                     if(gel && gel !== 'None') s += ` using a ${gel.toLowerCase()} gel`;
-                    s += ` positioned ${formatSpatial(id)}`;
                     return s;
                 } else {
                     const t = document.getElementById(`time_${id}`).value;
-                    return `lit by natural sunlight at ${t}:00 coming from ${formatSpatial(id)}`;
+                    return `lit by natural sunlight at ${t}:00`;
                 }
             });
-            sentences.push(`The scene is ${lStrs.join(' and ')}.`);
+            compLit += lStrs.join(', ') + ". ";
         }
 
         if (atmosObj) {
             const id = atmosObj.id;
             const fx = document.getElementById(`atm_fx_${id}`).value.toLowerCase();
-            const int = document.getElementById(`atm_int_${id}`).value;
-            sentences.push(`The atmosphere features ${fx} at an intensity level of ${int} out of 10.`);
+            compEnv += `, featuring ${fx} in the air`;
         }
 
-        if (styleObj) {
-            const id = styleObj.id;
-            const cin = document.getElementById(`sty_cin_${id}`).value;
-            const dir = document.getElementById(`sty_dir_${id}`).value;
-            const pal = document.getElementById(`sty_pal_${id}`).value;
-            sentences.push(`Shot in a ${cin.toLowerCase()} style, reminiscent of ${dir.split(' ')[0]}'s cinematography, featuring a ${pal.toLowerCase()} color palette.`);
-        }
-
-        if (colorObj) {
-            const id = colorObj.id;
-            const lut = document.getElementById(`col_lut_${id}`).value;
-            const stk = document.getElementById(`col_stk_${id}`).value;
-            sentences.push(`The image is color graded using a ${lut} look, emulating ${stk} film stock.`);
-        }
-
-        if (compObj) {
-            const id = compObj.id;
-            const rule = document.getElementById(`comp_rule_${id}`).value;
-            sentences.push(`The composition follows the ${rule.toLowerCase()} principle.`);
-        }
-
-        if (shotObj || moveObj) {
-            let sType = shotObj ? document.getElementById(`shot_type_${shotObj.id}`).value.split(' (')[0] : "shot";
-            let sMove = moveObj ? document.getElementById(`cam_move_${moveObj.id}`).value : "static camera";
-            sentences.push(`The sequence is filmed as a ${sType.toLowerCase()} featuring a ${sMove.toLowerCase()} movement.`);
-        }
-        
         if (camObj) {
             const id = camObj.id;
             const cam = document.getElementById(`cam_${id}`).value;
             const lens = document.getElementById(`lens_${id}`).value;
             const mm = document.getElementById(`mm_in_${id}`).value;
-            const ap = document.getElementById(`cam_ap_${id}`)?.value || "f/2.8";
-            const sh = document.getElementById(`cam_sh_${id}`)?.value.split(' ')[0] || "1/48";
-            const iso = document.getElementById(`cam_iso_${id}`)?.value || "400";
-            const fil = document.getElementById(`cam_fil_${id}`)?.value || "None";
-            
-            const camSel = document.getElementById(`cam_${id}`);
-            const lensSel = document.getElementById(`lens_${id}`);
-            const camFlav = camSel && camSel.options[camSel.selectedIndex] ? camSel.options[camSel.selectedIndex].getAttribute('data-flavor') : '';
-            const lensFlav = lensSel && lensSel.options[lensSel.selectedIndex] ? lensSel.options[lensSel.selectedIndex].getAttribute('data-flavor') : '';
-
-            let cStr = `Filmed on ${cam} with a ${lens} ${mm}mm lens at ${ap}, ${sh} shutter, ISO ${iso}.`;
-            if (camFlav || lensFlav) {
-                cStr += ` The camera and lens choice provides a look described as: ${[camFlav, lensFlav].filter(Boolean).join(' and ')}.`;
-            }
-            if(fil !== 'None') cStr += ` A ${fil} is applied.`;
-            sentences.push(cStr);
+            compCam = `Shot on ${cam} with a ${lens} ${mm}mm lens`;
         }
 
-        if (sentences.length === 0) {
+        if (styleObj || colorObj || compObj) {
+            let styArr = [];
+            if(styleObj) {
+                styArr.push(`${document.getElementById(`sty_cin_${styleObj.id}`).value.toLowerCase()} style`);
+                styArr.push(`directed by ${document.getElementById(`sty_dir_${styleObj.id}`).value.split(' ')[0]}`);
+            }
+            if(colorObj) {
+                styArr.push(`${document.getElementById(`col_lut_${colorObj.id}`).value} color grading`);
+            }
+            if(compObj) {
+                styArr.push(`${document.getElementById(`comp_rule_${compObj.id}`).value.toLowerCase()} composition`);
+            }
+            compSty = styArr.join(', ');
+        }
+
+        // --- ASSEMBLE BASED ON PLATFORM ---
+        let finalArr = [];
+        
+        if (!compSubj && !compEnv) {
             prompt = "Connect Scene, Style, or Character nodes to generate a cinematic prompt.";
         } else {
-            prompt = sentences.join(' ');
+            if (platform === 'veo') {
+                // Veo favors literal, detailed realism and environmental context
+                if(compEnv) finalArr.push(compEnv.charAt(0).toUpperCase() + compEnv.slice(1) + ".");
+                if(compSubj) finalArr.push(compSubj + ".");
+                if(compAct) finalArr.push(compAct + ".");
+                if(compShot || compCam) finalArr.push(`${compShot ? compShot : 'Cinematic shot'} ${compCam ? compCam : ''}.`);
+                if(compLit) finalArr.push(compLit);
+                if(compAudio) finalArr.push(`Audio: ${compAudio.replace(/,\s*$/, "")}.`);
+            } 
+            else if (platform === 'kling') {
+                // Kling favors action-heavy front-loaded prompts
+                let s1 = "";
+                if(compSubj) s1 += compSubj + " ";
+                if(compAct) s1 += compAct;
+                if(s1) finalArr.push(s1.trim() + ".");
+                if(compEnv) finalArr.push(`The setting is ${compEnv.replace('set in a', 'a')}.`);
+                if(compShot || compCam) finalArr.push(`${compShot ? compShot : 'Cinematic shot'} ${compCam ? compCam : ''}.`);
+                if(compAudio) finalArr.push(`Soundtrack: ${compAudio.replace(/,\s*$/, "")}.`);
+            }
+            else if (platform === 'luma') {
+                // Luma favors dynamic, highly descriptive adjectives
+                let s1 = `Dynamic ${compShot ? compShot : 'cinematic sequence'} of `;
+                if(compSubj) s1 += compSubj;
+                if(compAct) s1 += ` ${compAct}`;
+                finalArr.push(s1 + ".");
+                if(compEnv) finalArr.push(`Environment is ${compEnv.replace('set in a', 'a')}.`);
+                if(compSty) finalArr.push(`Visuals are breathtaking, ${compSty}.`);
+            }
+            else { // runway
+                // Runway favors classic structural prompting: Shot > Subject > Action > Environment > Style
+                let p = [];
+                if(compShot) p.push(compShot);
+                if(compSubj) p.push(compSubj);
+                if(compAct) p.push(compAct);
+                if(compEnv) p.push(compEnv);
+                if(compLit) p.push(compLit.trim());
+                if(compCam) p.push(compCam);
+                if(compSty) p.push(compSty);
+                finalArr.push(p.join(', ') + '.');
+            }
+
+            prompt = finalArr.join(' ');
         }
 
         if (negObj) {
             const id = negObj.id;
             const nval = document.getElementById(`neg_val_${id}`).value;
-            if(nval) prompt += `\\n\\nNEGATIVE PROMPT: ${nval}`;
+            if(nval) prompt += `\n\nNEGATIVE PROMPT: ${nval}`;
         }
-
     } 
     else if (platform === 'midjourney') {
         let tags = [];
