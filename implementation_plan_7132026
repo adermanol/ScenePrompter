@@ -1,0 +1,293 @@
+# 🚀 ysfyachting.com Canlıya Alma Yol Planı
+
+## Mevcut Durum Özeti
+
+| Öğe | Durum |
+|-----|-------|
+| **Proje Tipi** | Statik site (HTML/CSS/JS) — Backend yok |
+| **API** | localStorage tabanlı Mock API ([api.js](file:///c:/Works/YSF_YATCHING/js/api.js)) |
+| **Admin Auth** | Sabit şifre: `123456` ([auth.js](file:///c:/Works/YSF_YATCHING/js/auth.js#L8)) |
+| **SEO** | robots.txt, sitemap.xml, Open Graph, Schema.org — **Tümü hazır** |
+| **Görseller** | PNG + WebP formatlarında mevcut (~51 dosya) |
+| **Blog** | 8 blog yazısı hazır |
+| **Domain** | `ysfyachting.com` — GoDaddy'den satın alındı |
+
+> [!NOTE]
+> Proje tamamen statik bir site olduğu için en hızlı, en ucuz ve en güvenli yol **statik hosting** kullanmaktır. Aşağıdaki planda önerilen seçenekler bu yapıya göre hazırlanmıştır.
+
+---
+
+## Faz 1 — Hosting Seçimi ve Kurulumu
+
+### Önerilen Hosting Seçenekleri
+
+| Platform | Maliyet | SSL | CDN | Deploy Yöntemi | Önerilen? |
+|----------|---------|-----|-----|----------------|-----------|
+| **Netlify** | Ücretsiz (100 GB/ay) | ✅ Otomatik | ✅ Global | Git push / Drag & Drop | ⭐ **1. Tercih** |
+| **Cloudflare Pages** | Ücretsiz (sınırsız bant) | ✅ Otomatik | ✅ Global | Git push | ⭐ Alternatif |
+| **Vercel** | Ücretsiz (100 GB/ay) | ✅ Otomatik | ✅ Global | Git push | ✅ İyi |
+| **GitHub Pages** | Ücretsiz | ✅ Otomatik | ❌ | Git push | ✅ Basit |
+| **GoDaddy Hosting** | ~$5-10/ay | ✅ Ücretli | ❌ | FTP | ❌ Pahalı |
+
+> [!IMPORTANT]
+> **Hangisini tercih ediyorsun?** Netlify veya Cloudflare Pages öneriyorum çünkü:
+> - Ücretsiz SSL sertifikası
+> - Global CDN (Türkiye dahil hızlı yükleme)
+> - Otomatik deploy (git push ile)
+> - Custom domain desteği
+> - GoDaddy hosting satın almaya **gerek yok**
+
+---
+
+## Faz 2 — Canlıya Almadan Önceki Hazırlıklar
+
+### 2.1 🔒 Güvenlik Düzeltmeleri (Kritik)
+
+> [!CAUTION]
+> Admin şifresi şu anda düz metin olarak kaynak kodda duruyor: `const ADMIN_PASSWORD_HASH = '123456'`
+> Bu, site canlıya alındığında herkesin görebileceği bir güvenlik açığıdır.
+
+#### [MODIFY] [auth.js](file:///c:/Works/YSF_YATCHING/js/auth.js)
+- Admin şifresini güçlü bir şifre ile değiştir (en az 12 karakter)
+- SHA-256 hash ile karşılaştırma yap (tam güvenlik için değil, ancak düz metinden iyidir)
+- Brute-force koruması ekle (3 deneme sonrası kilit)
+
+### 2.2 📁 Gereksiz Dosyaları Temizle
+
+Canlıya yüklenmemesi gereken dosyalar:
+
+| Dosya | Neden |
+|-------|-------|
+| `server.ps1` | Lokal geliştirme sunucusu |
+| `optimize_images.py` | Build-time araç |
+| `wrap_picture.py` | Build-time araç |
+| `scraper_temp/` | Geçici scraping verileri |
+| `implementation_plan09072026` | Geliştirme dokümanı |
+| `*.md` dosyaları (strateji/plan) | İç dokümanlar |
+| `assets/Input/` | Ham giriş görselleri |
+| `assets/Cover/` | Kontrol edilmeli |
+| `*.png` (images klasöründeki) | WebP versiyonları varsa PNG'ler çıkarılabilir |
+
+#### [NEW] `.gitignore`
+```
+server.ps1
+optimize_images.py
+wrap_picture.py
+scraper_temp/
+implementation_plan09072026
+*.md
+!blog/**/*.md
+assets/Input/
+```
+
+### 2.3 🖼️ Görsel Optimizasyonu
+
+- `assets/images/` klasöründe hem PNG hem WebP var
+- PNG dosyaları toplam **~22 MB**, WebP dosyaları toplam **~4.5 MB**
+- Sadece WebP dosyalarını deploy et (PNG'leri `.gitignore`'a ekle)
+- HTML'lerde `<picture>` tag'leri zaten WebP kullanıyor mu kontrol et
+
+### 2.4 🌐 URL ve Link Kontrolü
+
+#### [MODIFY] [sitemap.xml](file:///c:/Works/YSF_YATCHING/sitemap.xml)
+- Tüm blog sayfalarını sitemap'e ekle (şu anda sadece 4 tanesi var, 8 blog yazısı mevcut)
+- Eksik sayfalar: `catalog.html`, `vip-catalog.html` eklenebilir
+
+#### Kontrol Listesi:
+- [ ] Tüm internal linkler doğru çalışıyor mu?
+- [ ] `og:image` dosyası (`og-cover.jpg`) mevcut — ✅
+- [ ] Canonical URL'ler doğru mu? — ✅ `https://www.ysfyachting.com/`
+
+---
+
+## Faz 3 — Git Repository Oluşturma
+
+```bash
+# 1. Git repo başlat
+cd c:\Works\YSF_YATCHING
+git init
+git add .
+git commit -m "Initial commit: YSF Yachting website"
+
+# 2. GitHub'da repo oluştur (private önerilir)
+# GitHub.com > New Repository > "ysf-yachting-website" > Private
+
+# 3. Remote ekle ve push et
+git remote add origin https://github.com/KULLANICI_ADIN/ysf-yachting-website.git
+git branch -M main
+git push -u origin main
+```
+
+---
+
+## Faz 4 — Hosting'e Deploy (Netlify Örneği)
+
+### Adım adım:
+
+1. **[netlify.com](https://netlify.com)** adresine git, GitHub ile giriş yap
+2. **"Add new site" > "Import an existing project"** seç
+3. GitHub repo'nu bağla: `ysf-yachting-website`
+4. Build ayarları:
+   - **Build command**: *(boş bırak — statik site)*
+   - **Publish directory**: `.` *(kök dizin)*
+5. **"Deploy site"** butonuna tıkla
+
+> Deploy tamamlandığında `https://random-name.netlify.app` gibi bir geçici URL alacaksın.
+
+---
+
+## Faz 5 — Domain Bağlama (GoDaddy → Netlify)
+
+### Seçenek A: Nameserver Değiştirme (Önerilen) ⭐
+
+**Netlify tarafında:**
+1. Netlify > Site settings > Domain management > "Add custom domain"
+2. `ysfyachting.com` ve `www.ysfyachting.com` ekle
+3. Netlify'ın verdiği nameserver adreslerini not al (genelde `dns1.p0X.nsone.net` formatında)
+
+**GoDaddy tarafında:**
+1. [GoDaddy DNS Yönetimi](https://dcc.godaddy.com/manage-dns) sayfasına git
+2. `ysfyachting.com` domain'ini seç
+3. **Nameservers** bölümünde "Change" tıkla
+4. "I'll use my own nameservers" seç
+5. Netlify'ın verdiği nameserver'ları gir
+6. Kaydet
+
+> [!WARNING]
+> DNS değişiklikleri **24-48 saat** sürebilir (genellikle 1-2 saat içinde aktif olur).
+
+### Seçenek B: DNS Kayıtları ile Yönlendirme
+
+**GoDaddy DNS'te şu kayıtları ekle:**
+
+| Tip | Ad | Değer | TTL |
+|-----|------|-------|-----|
+| `A` | `@` | Netlify IP (104.198.14.52) | 600 |
+| `CNAME` | `www` | `your-site.netlify.app` | 600 |
+
+---
+
+## Faz 6 — SSL Sertifikası (HTTPS)
+
+Netlify kullanıyorsan:
+1. Site settings > Domain management > HTTPS
+2. **"Verify DNS configuration"** tıkla
+3. **"Provision certificate"** tıkla (Let's Encrypt otomatik)
+4. Birkaç dakika içinde `https://ysfyachting.com` aktif olacak
+
+> [!TIP]
+> Netlify, Cloudflare Pages ve Vercel'de SSL sertifikası **otomatik ve ücretsiz**tir. Ekstra bir şey yapmanıza gerek yoktur.
+
+---
+
+## Faz 7 — Canlıya Alma Sonrası Kontroller
+
+### 7.1 Teknik Kontroller
+
+| Kontrol | Araç | Beklenen Sonuç |
+|---------|------|----------------|
+| Site açılıyor mu? | Tarayıcı | ✅ `https://ysfyachting.com` |
+| www yönlendirmesi | Tarayıcı | `www.ysfyachting.com` → `ysfyachting.com` |
+| SSL aktif mi? | Tarayıcı (kilit ikonu) | 🔒 Yeşil kilit |
+| 404 sayfası çalışıyor mu? | `/olmayan-sayfa` | Custom 404 sayfası |
+| Admin panel | `/admin.html` | Şifre sorması gerekir |
+| Mobil uyumluluk | Chrome DevTools | Responsive tasarım |
+| Sayfa hızı | [PageSpeed Insights](https://pagespeed.web.dev/) | 90+ skor |
+| SEO kontrolü | [Google Rich Results Test](https://search.google.com/test/rich-results) | Schema.org doğrulanmış |
+
+### 7.2 Google Araçları Kurulumu
+
+1. **Google Search Console**
+   - [search.google.com/search-console](https://search.google.com/search-console) adresine git
+   - `ysfyachting.com` property ekle
+   - DNS TXT kaydı ile doğrula
+   - Sitemap'i gönder: `https://www.ysfyachting.com/sitemap.xml`
+
+2. **Google Analytics 4**
+   - [analytics.google.com](https://analytics.google.com) adresine git
+   - Yeni GA4 property oluştur
+   - Tracking kodunu `index.html` `<head>` bölümüne ekle
+   - Tüm sayfalara ekle (blog dahil)
+
+3. **Google Business Profile** (isteğe bağlı)
+   - İşletme profili oluştur
+   - Adres, telefon, web sitesi bilgilerini gir
+
+---
+
+## Faz 8 — Netlify Özel Yapılandırma
+
+#### [NEW] `netlify.toml` (proje kökünde oluşturulacak)
+
+```toml
+[build]
+  publish = "."
+
+# www → non-www yönlendirme
+[[redirects]]
+  from = "https://www.ysfyachting.com/*"
+  to = "https://ysfyachting.com/:splat"
+  status = 301
+  force = true
+
+# Custom 404
+[[redirects]]
+  from = "/*"
+  to = "/404.html"
+  status = 404
+
+# Güvenlik ve cache headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+```
+
+---
+
+## Özet Zaman Çizelgesi
+
+| Faz | Süre | Öncelik |
+|-----|------|---------|
+| Faz 1: Hosting seçimi | 5 dk | 🔴 Karar gerekli |
+| Faz 2: Güvenlik + temizlik | 30 dk | 🔴 Kritik |
+| Faz 3: Git repo oluşturma | 10 dk | 🟡 |
+| Faz 4: Deploy | 5 dk | 🟡 |
+| Faz 5: Domain bağlama | 15 dk + DNS bekleme | 🟡 |
+| Faz 6: SSL sertifikası | 5 dk (otomatik) | 🟢 |
+| Faz 7: Kontroller | 30 dk | 🟡 |
+| Faz 8: Netlify config | 10 dk | 🟢 |
+
+**Toplam aktif çalışma: ~2 saat**
+**DNS yayılımı bekleme: 1-48 saat**
+
+---
+
+## Açık Sorular
+
+> [!IMPORTANT]
+> Aşağıdaki kararları vermemiz gerekiyor:
+
+1. **Hosting platformu hangisi olsun?** Netlify mi, Cloudflare Pages mi, yoksa başka bir tercih mi?
+2. **GitHub hesabın var mı?** Yoksa oluşturmamız gerekecek.
+3. **Google Analytics ve Search Console kurulumu yapmamı ister misin?** (Tracking kodlarını siteye eklemem gerekecek)
+4. **Admin paneli canlıda da kullanılacak mı?** Eğer evet ise güvenlik güncellemesi şart.
+5. **www.ysfyachting.com mu yoksa ysfyachting.com mu ana domain olsun?** (SEO açısından birini seçmek gerekiyor)
+6. **E-posta adresi gerekli mi?** (örn: `info@ysfyachting.com`) — GoDaddy üzerinden veya ücretsiz Cloudflare Email Routing ile kurulabilir.

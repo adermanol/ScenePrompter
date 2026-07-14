@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ScenePrompter - AI Video Artist OS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#050505">
+    
+    <!-- Three.js and OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <a href="https://www.drmnl.studio" target="_blank" style="position:fixed; top:20px; left:25px; z-index:2000; cursor:pointer;">
+        <img src="assets/logo.png" alt="DRMNL Studio" style="height:25px; filter: invert(1) opacity(0.7); transition: 0.2s;" onmouseover="this.style.filter='invert(1) opacity(1) drop-shadow(0 0 10px rgba(255,255,255,0.5))'" onmouseout="this.style.filter='invert(1) opacity(0.7)'">
+    </a>
+    <div class="top-nav">
+        <button class="nav-btn" onpointerdown="createNode('render')">Render</button>
+        <button class="nav-btn" onpointerdown="createNode('light')">Light</button>
+        <button class="nav-btn" onpointerdown="createNode('camera')">Camera</button>
+        <button class="nav-btn" style="border-color:#55ff55" onpointerdown="createNode('scene')">Scene</button>
+        <button class="nav-btn" style="border-color:#ff55ff" onpointerdown="createNode('style')">Style</button>
+        <button class="nav-btn" style="border-color:#ffff55" onpointerdown="createNode('character')">Character</button>
+        <button class="nav-btn" style="border-color:var(--accent-sec)" onpointerdown="createNode('object')">Object</button>
+        <button class="nav-btn" style="border-color:#ff9955" onpointerdown="createNode('shot')">Shot Type</button>
+        <button class="nav-btn" style="border-color:#ff9955" onpointerdown="createNode('cammove')">Movement</button>
+        <button class="nav-btn" style="border-color:#55ccff" onpointerdown="createNode('atmos')">Atmosphere</button>
+        <button class="nav-btn" style="border-color:#ff55ff" onpointerdown="createNode('colorg')">Color Grade</button>
+        <button class="nav-btn" style="border-color:#cccccc" onpointerdown="createNode('comp')">Composition</button>
+        <button class="nav-btn" style="border-color:#ff0000" onpointerdown="createNode('neg')">Negative</button>
+        <div style="width: 1px; background: #333; margin: 0 5px;"></div>
+        <button class="nav-btn" style="border-color:#888" onpointerdown="createNode('position')">Position</button>
+        <button class="nav-btn" style="border-color:var(--accent)" onpointerdown="createNode('preview')">Preview</button>
+        <button class="nav-btn" style="border-color:#fff" onpointerdown="createNode('stack')">Stack</button>
+        <button class="nav-btn" style="border-color:#ff5555" onpointerdown="createNode('sequence')">Sequence</button>
+        <div style="width: 1px; background: #333; margin: 0 5px;"></div>
+        <select id="preset_sel" onchange="loadPreset(this.value)" style="background:#111; color:#eee; border:1px solid #333; padding:5px; border-radius:4px; font-weight:bold; cursor:pointer;">
+            <option value="">-- Presets --</option>
+            <option value="cyberpunk">Cyberpunk</option>
+            <option value="noir">Film Noir</option>
+        </select>
+        <div style="width: 1px; background: #333; margin: 0 5px;"></div>
+        <button class="nav-btn" style="border-color:#aa55ff" onpointerdown="openHistory()">History</button>
+        <button class="nav-btn" style="border-color:#55ccff" onpointerdown="saveWorkspace()">Save</button>
+        <button class="nav-btn" style="border-color:#ffcc55" onpointerdown="loadWorkspace()">Load</button>
+    </div>
+
+    <div id="history-modal" style="display:none; position:fixed; top:50px; left:50%; transform:translateX(-50%); width:600px; max-height:80vh; background:#1a1a1a; border:1px solid #444; border-radius:8px; z-index:3000; overflow-y:auto; padding:20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
+            <h3 style="margin:0; color:#eee;">Prompt History & Export</h3>
+            <button onclick="document.getElementById('history-modal').style.display='none'" style="background:none; border:none; color:#fff; cursor:pointer; font-size:1.2rem;">&times;</button>
+        </div>
+        <div id="history-content" style="display:flex; flex-direction:column; gap:10px;"></div>
+        <div style="margin-top:20px; text-align:right;">
+            <button onclick="clearHistory()" style="background:#551111; color:#fff; border:1px solid #ff5555; padding:8px 16px; border-radius:4px; cursor:pointer; margin-right:10px;">Clear History</button>
+            <button onclick="exportHistory()" style="background:#115511; color:#fff; border:1px solid #55ff55; padding:8px 16px; border-radius:4px; cursor:pointer;">Export as .txt</button>
+        </div>
+    </div>
+
+    <div id="minimap"><div id="mini-vp" class="mini-vp"></div></div>
+
+    <div id="viewport">
+        <div id="world">
+            <div class="grid-layer"></div>
+            <svg id="svg-layer"></svg>
+        </div>
+    </div>
+
+    <script src="js/db.js"></script>
+    <script src="js/promptEngine.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
