@@ -330,10 +330,10 @@ window.createNode = function(type) {
     }
     else if (type === 'preview') {
         hasIn = true; hasOut = true; title = "GLOBAL PREVIEW (3D)";
-        el.style.width = '350px'; el.style.height = '320px';
+        el.style.width = 'auto';
         content = `
-            <div class="viewport-3d" id="v3d_${id}">
-                <div id="three_${id}" style="width:100%; height:100%;"></div>
+            <div class="viewport-3d" id="v3d_${id}" style="resize: both; overflow: hidden; min-width: 250px; min-height: 200px; width: 350px; height: 320px;">
+                <div id="three_${id}" style="width:100%; height:100%; position:relative;"></div>
             </div>
             <div style="text-align:center; font-size:0.6rem; color:#666">Three.js Engine</div>
         `;
@@ -716,6 +716,14 @@ window.initThreePreview = function(id) {
     renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
 
+    const labelContainer = document.createElement('div');
+    labelContainer.style.position = 'absolute';
+    labelContainer.style.top = '0'; labelContainer.style.left = '0';
+    labelContainer.style.width = '100%'; labelContainer.style.height = '100%';
+    labelContainer.style.pointerEvents = 'none';
+    labelContainer.style.overflow = 'hidden';
+    container.appendChild(labelContainer);
+
     const grid = new THREE.GridHelper(200, 20);
     scene.add(grid);
 
@@ -725,12 +733,31 @@ window.initThreePreview = function(id) {
     const orbit = new THREE.OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
 
-    window.threePreviews[id] = { scene, camera, renderer, orbit, objects: [] };
+    window.threePreviews[id] = { scene, camera, renderer, orbit, objects: [], labels: [], labelContainer };
+
+    const resizeObserver = new ResizeObserver(() => {
+        if(container.clientWidth === 0) return;
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+    resizeObserver.observe(container.parentElement);
 
     const animate = function() {
         requestAnimationFrame(animate);
         orbit.update();
         renderer.render(scene, camera);
+
+        const preview = window.threePreviews[id];
+        preview.labels.forEach(l => {
+            const pos = l.pos.clone();
+            pos.project(camera);
+            if(pos.z > 1) { l.el.style.display = 'none'; return; }
+            l.el.style.display = 'block';
+            const x = (pos.x * .5 + .5) * container.clientWidth;
+            const y = (pos.y * -.5 + .5) * container.clientHeight;
+            l.el.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
+        });
     };
     animate();
 }
@@ -741,6 +768,8 @@ window.updateThreePreview = function(pid) {
 
     preview.objects.forEach(obj => preview.scene.remove(obj));
     preview.objects = [];
+    preview.labels = [];
+    preview.labelContainer.innerHTML = '';
     preview.scene.background = new THREE.Color(0x1a1a1a);
 
     const inputs = window.cables.filter(c => c.to === pid);
@@ -760,6 +789,37 @@ window.updateThreePreview = function(pid) {
     const renderNodeIn3D = (node, customCoords = null) => {
         const coords = customCoords || getSpatialCoords(node.id);
         const {x, y, z} = coords;
+
+        const h = document.getElementById(`sp_h_${node.id}`)?.value || '';
+        const v = document.getElementById(`sp_v_${node.id}`)?.value || '';
+        const d = document.getElementById(`sp_d_${node.id}`)?.value || '';
+        let labelText = [h, v, d].filter(Boolean).join(' | ');
+        
+        if (node.type === 'character') {
+            labelText = document.getElementById(`chr_name_${node.id}`)?.value || 'CHARACTER';
+        } else if (node.type === 'light') {
+            labelText = "LIGHT" + (labelText ? ' : ' + labelText : '');
+        } else if (node.type === 'camera') {
+            labelText = "CAMERA" + (labelText ? ' : ' + labelText : '');
+        } else if (node.type === 'object') {
+            labelText = document.getElementById(`val_${node.id}`)?.value || 'OBJECT';
+        }
+
+        if(labelText && node.type !== 'scene' && node.type !== 'position') {
+            const el = document.createElement('div');
+            el.innerText = labelText;
+            el.style.position = 'absolute';
+            el.style.color = '#00f2ea';
+            el.style.background = 'rgba(0,0,0,0.7)';
+            el.style.border = '1px solid #00f2ea';
+            el.style.padding = '2px 6px';
+            el.style.borderRadius = '4px';
+            el.style.fontSize = '10px';
+            el.style.fontWeight = 'bold';
+            el.style.whiteSpace = 'nowrap';
+            preview.labelContainer.appendChild(el);
+            preview.labels.push({ el, pos: new THREE.Vector3(x, y + 25, z) });
+        }
 
         if (node.type === 'character') {
             const charGroup = new THREE.Group();
@@ -859,14 +919,33 @@ window.updateThreePreview = function(pid) {
         }
         else if (node.type === 'scene') {
             const time = document.getElementById(`scn_time_${node.id}`)?.value || "";
+            let addSun = false;
+            let sunColor = 0xffffff;
             if (time.includes("Night")) {
                 preview.scene.background = new THREE.Color(0x050510);
             } else if (time.includes("Golden Hour")) {
                 preview.scene.background = new THREE.Color(0xcc5522);
-                const dl = new THREE.DirectionalLight(0xffaa55, 1);
-                dl.position.set(-50, 20, 50);
-                preview.scene.add(dl);
-                preview.objects.push(dl);
+                addSun = true; sunColor = 0xffaa55;
+            } else {
+                preview.scene.background = new THREE.Color(0x87CEEB);
+                addSun = true; sunColor = 0xffffee;
+            }
+            if (addSun) {
+                const dl = new THREE.DirectionalLight(sunColor, 1);
+                dl.position.set(-80, 60, -80);
+                const sunGeo = new THREE.SphereGeometry(12, 16, 16);
+                const sunMat = new THREE.MeshBasicMaterial({color: sunColor});
+                const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+                sunMesh.position.copy(dl.position);
+                preview.scene.add(dl); preview.scene.add(sunMesh);
+                preview.objects.push(dl, sunMesh);
+                
+                const el = document.createElement('div');
+                el.innerText = 'SUNLIGHT';
+                el.style.position = 'absolute'; el.style.color = '#ffcc00'; el.style.background = 'rgba(0,0,0,0.5)';
+                el.style.padding = '2px 6px'; el.style.borderRadius = '4px'; el.style.fontSize = '10px'; el.style.fontWeight = 'bold';
+                preview.labelContainer.appendChild(el);
+                preview.labels.push({ el, pos: new THREE.Vector3(-80, 75, -80) });
             }
         }
     };
