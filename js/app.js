@@ -762,12 +762,19 @@ window.updateThreePreview = function(pid) {
         const {x, y, z} = coords;
 
         if (node.type === 'character') {
-            const geo = new THREE.CapsuleGeometry(6, 15, 4, 8);
-            const mat = new THREE.MeshStandardMaterial({color: 0x3388ff});
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, y + 15, z);
-            preview.scene.add(mesh);
-            preview.objects.push(mesh);
+            const charGroup = new THREE.Group();
+            const bodyGeo = new THREE.CylinderGeometry(4, 4, 15, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({color: 0x3388ff});
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 7.5;
+            const headGeo = new THREE.SphereGeometry(3.5, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({color: 0xffccaa});
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 18;
+            charGroup.add(body); charGroup.add(head);
+            charGroup.position.set(x, y, z);
+            preview.scene.add(charGroup);
+            preview.objects.push(charGroup);
         }
         else if (node.type === 'object') {
             const geo = new THREE.BoxGeometry(10, 10, 10);
@@ -791,18 +798,64 @@ window.updateThreePreview = function(pid) {
                 color = new THREE.Color(0xffeedd);
                 preview.scene.background = new THREE.Color(0x87CEEB);
             }
+            
+            const lightGroup = new THREE.Group();
+            const standGeo = new THREE.CylinderGeometry(0.5, 0.5, 20, 8);
+            const standMat = new THREE.MeshStandardMaterial({color: 0x111111});
+            const stand = new THREE.Mesh(standGeo, standMat);
+            stand.position.y = 10;
+            const headGeo = new THREE.BoxGeometry(6, 6, 6);
+            const headMat = new THREE.MeshStandardMaterial({color: 0x444444});
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 20;
+            const bulbGeo = new THREE.SphereGeometry(2, 16, 16);
+            const bulbMat = new THREE.MeshBasicMaterial({color: color});
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.y = 20; bulb.position.z = 3;
+            
+            if(mode === 'industrial') {
+                lightGroup.add(stand); lightGroup.add(head); lightGroup.add(bulb);
+                lightGroup.position.set(x, y, z);
+                lightGroup.lookAt(0, 10, 0); 
+            }
+            
             const pl = new THREE.PointLight(color, intensity, 300);
             pl.position.set(x, y + 20, z);
-            const sphere = new THREE.Mesh(new THREE.SphereGeometry(3), new THREE.MeshBasicMaterial({color: color}));
-            sphere.position.copy(pl.position);
-            preview.scene.add(pl); preview.scene.add(sphere);
-            preview.objects.push(pl, sphere);
+            
+            if(mode === 'industrial') {
+                preview.scene.add(lightGroup); preview.objects.push(lightGroup);
+            } else {
+                const sunGeo = new THREE.SphereGeometry(15, 16, 16);
+                const sunMesh = new THREE.Mesh(sunGeo, bulbMat);
+                sunMesh.position.set(x, y + 60, z - 40);
+                pl.position.copy(sunMesh.position);
+                preview.scene.add(sunMesh); preview.objects.push(sunMesh);
+            }
+            
+            preview.scene.add(pl);
+            preview.objects.push(pl);
         }
         else if (node.type === 'camera') {
             const mm = parseFloat(document.getElementById(`mm_in_${node.id}`)?.value || 50);
             const fov = 2 * Math.atan(24 / (2 * mm)) * (180 / Math.PI);
             preview.camera.fov = fov;
             preview.camera.updateProjectionMatrix();
+            
+            const camGroup = new THREE.Group();
+            const bodyGeo = new THREE.BoxGeometry(8, 8, 12);
+            const bodyMat = new THREE.MeshStandardMaterial({color: 0x222222});
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            const lensGeo = new THREE.CylinderGeometry(3, 4, 8, 16);
+            const lensMat = new THREE.MeshStandardMaterial({color: 0x111111});
+            const lens = new THREE.Mesh(lensGeo, lensMat);
+            lens.rotation.x = Math.PI / 2;
+            lens.position.z = 6;
+            camGroup.add(body); camGroup.add(lens);
+            camGroup.position.set(x, y + 15, z);
+            camGroup.lookAt(0, 10, 0);
+            
+            preview.scene.add(camGroup);
+            preview.objects.push(camGroup);
         }
         else if (node.type === 'scene') {
             const time = document.getElementById(`scn_time_${node.id}`)?.value || "";
