@@ -326,8 +326,10 @@ window.createNode = function(type) {
                     <option value="dolly_out">Dolly Out From</option>
                     <option value="rack_focus">Rack Focus To</option>
                 </select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">TARGET (NAME)</div>
-                <input type="text" id="cam_adv_tgt_${id}" placeholder="e.g. Hacker" oninput="triggerUpdate()" style="min-height:22px; padding:6px;"></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">TARGET NODE</div>
+                <select id="cam_adv_tgt_${id}" onchange="triggerUpdate()">
+                    <option value="">-- Select Target --</option>
+                </select></div>
             </div>
             <div style="display:flex; gap:5px; margin-top:5px">
                 <div style="flex:1"><div style="font-size:0.6rem; color:#666">KEEP DISTANCE</div>
@@ -453,6 +455,37 @@ window.updateCamFlavor = function(id) {
 }
 
 window.triggerUpdate = function() {
+    let targets = [];
+    Object.values(window.nodes).forEach(n => {
+        let name = '';
+        if (n.type === 'character') name = document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
+        else if (n.type === 'object') name = document.getElementById(`val_${n.id}`)?.value || 'Object';
+        else if (n.type === 'light') name = 'Light';
+        else if (n.type === 'camera') name = 'Camera';
+        
+        if (name) {
+            targets.push({ id: n.id, name: `${name} (${n.id.substring(0,4)})`, rawName: name });
+        }
+    });
+
+    Object.values(window.nodes).forEach(n => {
+        if (n.type === 'camera') {
+            const sel = document.getElementById(`cam_adv_tgt_${n.id}`);
+            if (sel) {
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">-- Select Target --</option>';
+                targets.forEach(t => {
+                    if (t.id === n.id) return;
+                    const opt = document.createElement('option');
+                    opt.value = t.rawName;
+                    opt.text = t.name;
+                    sel.appendChild(opt);
+                });
+                sel.value = currentVal;
+            }
+        }
+    });
+
     Object.values(window.nodes).forEach(n => {
         if(n.type === 'preview') window.updateThreePreview(n.id);
         if(n.type === 'stack') updateStack(n.id, window.nodes, window.cables);
