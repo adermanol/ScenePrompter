@@ -313,6 +313,31 @@ window.createNode = function(type) {
             <div style="display:flex; gap:5px; margin-top:5px">
                 <div style="flex:1"><div style="font-size:0.6rem; color:#666">ISO</div><select id="cam_iso_${id}" onchange="triggerUpdate()">${DB.camIso.map(o=>`<option>${o}</option>`).join('')}</select></div>
                 <div style="flex:1"><div style="font-size:0.6rem; color:#666">FILTER</div><select id="cam_fil_${id}" onchange="triggerUpdate()">${DB.camFilter.map(o=>`<option>${o}</option>`).join('')}</select></div>
+            </div>
+            <hr style="border:0; border-top:1px solid #333; margin:10px 0">
+            <div style="font-size:0.6rem; color:#666">ADVANCED TRACKING</div>
+            <div style="display:flex; gap:5px; margin-top:5px">
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">ACTION</div>
+                <select id="cam_adv_act_${id}" onchange="triggerUpdate()">
+                    <option value="none">None / Static</option>
+                    <option value="follow">Follow Target</option>
+                    <option value="orbit">Orbit Around</option>
+                    <option value="dolly_in">Dolly In To</option>
+                    <option value="dolly_out">Dolly Out From</option>
+                    <option value="rack_focus">Rack Focus To</option>
+                </select></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">TARGET (NAME)</div>
+                <input type="text" id="cam_adv_tgt_${id}" placeholder="e.g. Hacker" oninput="triggerUpdate()" style="min-height:22px; padding:6px;"></div>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:5px">
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">KEEP DISTANCE</div>
+                <select id="cam_adv_dist_${id}" onchange="triggerUpdate()">
+                    <option value="">Auto (Don't specify)</option>
+                    <option value="extreme close proximity">Extreme Close</option>
+                    <option value="close proximity (1m)">Close (1m)</option>
+                    <option value="medium distance (3m)">Medium (3m)</option>
+                    <option value="far distance (10m)">Far (10m)</option>
+                </select></div>
             </div>`;
         setTimeout(() => { if(window.updateCamFlavor) window.updateCamFlavor(id); }, 0);
     }
@@ -776,13 +801,25 @@ window.updateThreePreview = function(pid) {
 
     const getSpatialCoords = (id) => {
         let x=0, y=0, z=0;
-        const h = document.getElementById(`sp_h_${id}`)?.value || 'Center';
-        const v = document.getElementById(`sp_v_${id}`)?.value || 'Ground';
-        const d = document.getElementById(`sp_d_${id}`)?.value || 'Midground';
+        const h = document.getElementById(`hpos_${id}`)?.value || 'center';
+        const v = document.getElementById(`vpos_${id}`)?.value || 'ground';
+        const d = document.getElementById(`depth_${id}`)?.value || 'midground';
         
-        if(h === 'Left') x = -40; else if(h === 'Right') x = 40;
-        if(v === 'Eye Level') y = 25; else if(v === 'High Angle / Overhead') y = 60;
-        if(d === 'Foreground') z = 40; else if(d === 'Background') z = -40;
+        if(h === 'far_left') x = -80;
+        else if(h === 'camera_left') x = -40;
+        else if(h === 'camera_right') x = 40;
+        else if(h === 'far_right') x = 80;
+
+        if(v === 'eye_level') y = 25; 
+        else if(v === 'above') y = 45;
+        else if(v === 'overhead') y = 80;
+        else if(v === 'below') y = -20;
+        
+        if(d === 'extreme_fg') z = 80;
+        else if(d === 'foreground') z = 40; 
+        else if(d === 'background') z = -40;
+        else if(d === 'far_bg') z = -80;
+        else if(d === 'horizon') z = -150;
         return {x, y, z};
     };
 
@@ -790,10 +827,13 @@ window.updateThreePreview = function(pid) {
         const coords = customCoords || getSpatialCoords(node.id);
         const {x, y, z} = coords;
 
-        const h = document.getElementById(`sp_h_${node.id}`)?.value || '';
-        const v = document.getElementById(`sp_v_${node.id}`)?.value || '';
-        const d = document.getElementById(`sp_d_${node.id}`)?.value || '';
-        let labelText = [h, v, d].filter(Boolean).join(' | ');
+        const hSel = document.getElementById(`hpos_${node.id}`);
+        const vSel = document.getElementById(`vpos_${node.id}`);
+        const dSel = document.getElementById(`depth_${node.id}`);
+        const hVal = hSel && hSel.selectedIndex >= 0 ? hSel.options[hSel.selectedIndex].text : '';
+        const vVal = vSel && vSel.selectedIndex >= 0 ? vSel.options[vSel.selectedIndex].text : '';
+        const dVal = dSel && dSel.selectedIndex >= 0 ? dSel.options[dSel.selectedIndex].text : '';
+        let labelText = [hVal, vVal, dVal].filter(Boolean).join(' | ');
         
         if (node.type === 'character') {
             labelText = document.getElementById(`chr_name_${node.id}`)?.value || 'CHARACTER';
@@ -918,21 +958,40 @@ window.updateThreePreview = function(pid) {
             preview.objects.push(camGroup);
         }
         else if (node.type === 'scene') {
-            const time = document.getElementById(`scn_time_${node.id}`)?.value || "";
+            const timeStr = document.getElementById(`scn_time_${node.id}`)?.value || "";
             let addSun = false;
             let sunColor = 0xffffff;
-            if (time.includes("Night")) {
+            let sunX = -80, sunY = 60, sunZ = -80;
+
+            if (timeStr.includes("Night")) {
                 preview.scene.background = new THREE.Color(0x050510);
-            } else if (time.includes("Golden Hour")) {
-                preview.scene.background = new THREE.Color(0xcc5522);
-                addSun = true; sunColor = 0xffaa55;
             } else {
-                preview.scene.background = new THREE.Color(0x87CEEB);
-                addSun = true; sunColor = 0xffffee;
+                addSun = true;
+                if (timeStr.includes("Golden Hour") || timeStr.includes("Twilight")) {
+                    preview.scene.background = new THREE.Color(0xcc5522);
+                    sunColor = 0xffaa55;
+                    sunY = 20;
+                    sunX = timeStr.includes("Morning") ? 100 : -100;
+                } else if (timeStr.includes("Morning") || timeStr.includes("Pre-dawn")) {
+                    preview.scene.background = new THREE.Color(0x87CEEB);
+                    sunColor = 0xffffee;
+                    sunY = 50;
+                    sunX = 80;
+                } else if (timeStr.includes("Noon")) {
+                    preview.scene.background = new THREE.Color(0x60b0ff);
+                    sunColor = 0xffffff;
+                    sunY = 120;
+                    sunX = 0;
+                } else {
+                    preview.scene.background = new THREE.Color(0x87CEEB);
+                    sunColor = 0xffffee;
+                    sunY = 50;
+                    sunX = -80;
+                }
             }
             if (addSun) {
-                const dl = new THREE.DirectionalLight(sunColor, 1);
-                dl.position.set(-80, 60, -80);
+                const dl = new THREE.DirectionalLight(sunColor, 1.5);
+                dl.position.set(sunX, sunY, sunZ);
                 const sunGeo = new THREE.SphereGeometry(12, 16, 16);
                 const sunMat = new THREE.MeshBasicMaterial({color: sunColor});
                 const sunMesh = new THREE.Mesh(sunGeo, sunMat);
@@ -945,7 +1004,7 @@ window.updateThreePreview = function(pid) {
                 el.style.position = 'absolute'; el.style.color = '#ffcc00'; el.style.background = 'rgba(0,0,0,0.5)';
                 el.style.padding = '2px 6px'; el.style.borderRadius = '4px'; el.style.fontSize = '10px'; el.style.fontWeight = 'bold';
                 preview.labelContainer.appendChild(el);
-                preview.labels.push({ el, pos: new THREE.Vector3(-80, 75, -80) });
+                preview.labels.push({ el, pos: new THREE.Vector3(sunX, sunY + 15, sunZ) });
             }
         }
     };

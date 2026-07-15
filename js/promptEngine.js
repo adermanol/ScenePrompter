@@ -150,6 +150,23 @@ function updateStack(sid, nodes, cables) {
             const lens = document.getElementById(`lens_${id}`).value;
             const mm = document.getElementById(`mm_in_${id}`).value;
             compCam = `Shot on ${cam} with a ${lens} ${mm}mm lens`;
+
+            const advAct = document.getElementById(`cam_adv_act_${id}`)?.value || 'none';
+            const advTgt = document.getElementById(`cam_adv_tgt_${id}`)?.value || '';
+            const advDist = document.getElementById(`cam_adv_dist_${id}`)?.value || '';
+            
+            if (advAct !== 'none' && advTgt) {
+                let actionStr = "";
+                if (advAct === 'follow') actionStr = `following ${advTgt}`;
+                else if (advAct === 'orbit') actionStr = `orbiting around ${advTgt}`;
+                else if (advAct === 'dolly_in') actionStr = `dollying in towards ${advTgt}`;
+                else if (advAct === 'dolly_out') actionStr = `dollying out from ${advTgt}`;
+                else if (advAct === 'rack_focus') actionStr = `rack focusing onto ${advTgt}`;
+                
+                if (advDist) actionStr += `, maintaining a ${advDist}`;
+                
+                compCam += `. The camera is ${actionStr}`;
+            }
         }
 
         if (styleObj || colorObj || compObj) {
@@ -280,6 +297,23 @@ function updateStack(sid, nodes, cables) {
             tags.push("ISO " + document.getElementById(`cam_iso_${id}`)?.value);
             const fil = document.getElementById(`cam_fil_${id}`)?.value;
             if (fil && fil !== 'None') tags.push(fil);
+
+            const advAct = document.getElementById(`cam_adv_act_${id}`)?.value || 'none';
+            const advTgt = document.getElementById(`cam_adv_tgt_${id}`)?.value || '';
+            const advDist = document.getElementById(`cam_adv_dist_${id}`)?.value || '';
+            
+            if (advAct !== 'none' && advTgt) {
+                let actionStr = "";
+                if (advAct === 'follow') actionStr = `following ${advTgt}`;
+                else if (advAct === 'orbit') actionStr = `orbiting around ${advTgt}`;
+                else if (advAct === 'dolly_in') actionStr = `dollying in towards ${advTgt}`;
+                else if (advAct === 'dolly_out') actionStr = `dollying out from ${advTgt}`;
+                else if (advAct === 'rack_focus') actionStr = `rack focus to ${advTgt}`;
+                
+                if (advDist) actionStr += ` at ${advDist}`;
+                
+                tags.push("camera " + actionStr);
+            }
         }
         
         if (renderObj) {
