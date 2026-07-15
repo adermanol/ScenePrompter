@@ -874,6 +874,55 @@ window.updateThreePreview = function(pid) {
             labelText = "LIGHT" + (labelText ? ' : ' + labelText : '');
         } else if (node.type === 'camera') {
             labelText = "CAMERA" + (labelText ? ' : ' + labelText : '');
+            
+            const advAct = document.getElementById(`cam_adv_act_${node.id}`)?.value || 'none';
+            const advTgt = document.getElementById(`cam_adv_tgt_${node.id}`)?.value || '';
+            const advDist = document.getElementById(`cam_adv_dist_${node.id}`)?.value || '';
+            
+            if (advAct !== 'none' && advTgt) {
+                let actionStr = advAct.toUpperCase().replace('_', ' ');
+                let trackInfo = `\n[${actionStr}: ${advTgt}`;
+                if (advDist) {
+                    const distName = document.getElementById(`cam_adv_dist_${node.id}`)?.options[document.getElementById(`cam_adv_dist_${node.id}`).selectedIndex]?.text || '';
+                    if (distName && !distName.includes('Auto')) trackInfo += ` | ${distName}`;
+                }
+                trackInfo += `]`;
+                labelText += trackInfo;
+                
+                let tgtNode = null;
+                for (let nid in window.nodes) {
+                    let n = window.nodes[nid];
+                    let name = '';
+                    if (n.type === 'character') name = document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
+                    else if (n.type === 'object') name = document.getElementById(`val_${n.id}`)?.value || 'Object';
+                    else if (n.type === 'light') name = 'Light';
+                    else if (n.type === 'camera') name = 'Camera';
+                    if (name === advTgt && n.id !== node.id) {
+                        tgtNode = n; break;
+                    }
+                }
+                
+                if (tgtNode) {
+                    let tx = 0, ty = 0, tz = 0;
+                    const feeder = window.cables.find(f => f.to === tgtNode.id && window.nodes[f.from]?.type === 'position');
+                    if (feeder && window.nodes[feeder.from]) {
+                        tx = parseFloat(document.getElementById(`x_${feeder.from}`)?.value || 0);
+                        ty = parseFloat(document.getElementById(`y_${feeder.from}`)?.value || 0);
+                        tz = parseFloat(document.getElementById(`z_${feeder.from}`)?.value || 0);
+                    } else {
+                        const tc = getSpatialCoords(tgtNode.id);
+                        tx = tc.x; ty = tc.y; tz = tc.z;
+                    }
+                    
+                    const points = [new THREE.Vector3(x, y + 15, z), new THREE.Vector3(tx, ty + 15, tz)];
+                    const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+                    const lineMat = new THREE.LineDashedMaterial({ color: 0xff00ff, dashSize: 2, gapSize: 2 });
+                    const line = new THREE.Line(lineGeo, lineMat);
+                    line.computeLineDistances();
+                    preview.scene.add(line);
+                    preview.objects.push(line);
+                }
+            }
         } else if (node.type === 'object') {
             labelText = document.getElementById(`val_${node.id}`)?.value || 'OBJECT';
         }
@@ -889,7 +938,8 @@ window.updateThreePreview = function(pid) {
             el.style.borderRadius = '4px';
             el.style.fontSize = '10px';
             el.style.fontWeight = 'bold';
-            el.style.whiteSpace = 'nowrap';
+            el.style.whiteSpace = 'pre';
+            el.style.textAlign = 'center';
             preview.labelContainer.appendChild(el);
             preview.labels.push({ el, pos: new THREE.Vector3(x, y + 25, z) });
         }
