@@ -464,6 +464,11 @@ window.createNode = function(type) {
     world.appendChild(el);
     window.nodes[id] = { id, type, el, zoom: 1 };
     new ResizeObserver(() => updateCables()).observe(el);
+
+    el.addEventListener('pointerdown', (e) => startLongPress(e, id, 'node'));
+    el.addEventListener('pointerup', cancelLongPress);
+    el.addEventListener('pointerleave', cancelLongPress);
+
     captureState();
 }
 
@@ -650,6 +655,9 @@ function cabUp(e) {
                 path.addEventListener('dblclick', () => { 
                     path.remove(); window.cables = window.cables.filter(c => c !== nc); window.triggerUpdate(); 
                 });
+                nc.path.addEventListener('pointerdown', (e) => startLongPress(e, nc.path, 'cable'));
+                nc.path.addEventListener('pointerup', cancelLongPress);
+                nc.path.addEventListener('pointerleave', cancelLongPress);
                 window.cables.push(nc);
                 updateCables();
                 window.triggerUpdate();
@@ -974,7 +982,7 @@ window.showToast = function(msg) {
 
 // TOOLS & EXPORTS
 window.resetStack = function(id) { window.cables = window.cables.filter(c => c.to !== id); updateCables(); window.triggerUpdate(); }
-window.copyStack = function(id) { 
+window.copyStack = function(id) {
     const ta = document.getElementById(`val_${id}`);
     if(!ta) return;
     ta.select(); ta.setSelectionRange(0, 99999);
@@ -984,6 +992,91 @@ window.openHistory = openHistory;
 window.clearHistory = clearHistory;
 window.exportHistory = exportHistory;
 window.sendToAPI = sendToAPI;
+
+// QUICK ADD PALETTE
+const NODE_CATEGORIES = {
+    'Temel': ['render', 'scene', 'style', 'character'],
+    'Özne': ['quadruped', 'insect', 'object'],
+    'Ortam': ['customloc', 'atmos', 'light'],
+    'Kamera': ['camera', 'shot', 'cammove', 'position'],
+    'Görünüm': ['colorg', 'comp', 'preview'],
+    'Çıktı': ['stack', 'sequence', 'neg']
+};
+
+window.openQuickAdd = function() {
+    const modal = document.getElementById('quick-add-modal');
+    const search = document.getElementById('quick-add-search');
+    search.value = '';
+    window.filterQuickAdd('');
+    modal.style.display = 'flex';
+    search.focus();
+};
+
+window.filterQuickAdd = function(query) {
+    const list = document.getElementById('quick-add-list');
+    list.innerHTML = '';
+    const q = query.toLowerCase();
+    for(let cat in NODE_CATEGORIES) {
+        const nodes = NODE_CATEGORIES[cat];
+        const filtered = nodes.filter(n => n.includes(q) || cat.toLowerCase().includes(q));
+        if(filtered.length === 0) continue;
+        filtered.forEach(type => {
+            const btn = document.createElement('button');
+            btn.style.cssText = 'background:#111; border:1px solid #333; color:#eee; padding:10px; border-radius:4px; cursor:pointer; font-size:0.75rem; font-weight:bold; min-height:44px; display:flex; align-items:center; justify-content:center; text-align:center;';
+            btn.textContent = type.toUpperCase();
+            btn.onpointerdown = () => {
+                createNode(type);
+                document.getElementById('quick-add-modal').style.display = 'none';
+                window.showToast(`${type} added`);
+            };
+            list.appendChild(btn);
+        });
+    }
+};
+
+// LONG-PRESS CONTEXT MENU
+let longPressTimer = null;
+const longPressDuration = 500;
+
+function startLongPress(e, id, type) {
+    longPressTimer = setTimeout(() => {
+        e.preventDefault();
+        showContextMenu(e, id, type);
+    }, longPressDuration);
+}
+
+function cancelLongPress() {
+    if(longPressTimer) clearTimeout(longPressTimer);
+}
+
+function showContextMenu(e, id, type) {
+    const menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed; background:#1a1a1a; border:1px solid #444; border-radius:6px; z-index:4000; box-shadow: 0 4px 12px rgba(0,0,0,0.8); min-width:140px;';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+
+    const items = [];
+    if(type === 'node') {
+        items.push({ label: '🔄 Çoğalt', fn: () => window.duplicateNode(id) });
+        items.push({ label: '✏️ Seç', fn: () => { document.querySelectorAll('.node').forEach(n => n.classList.remove('selected')); document.getElementById(id).classList.add('selected'); } });
+        items.push({ label: '🗑️ Sil', fn: () => { window.kill(id); window.showToast('Node deleted'); } });
+    } else if(type === 'cable') {
+        items.push({ label: '🗑️ Bağlantıyı sil', fn: () => { const c = window.cables.find(cb => cb.path === id); if(c) { c.path.remove(); window.cables = window.cables.filter(cb => cb !== c); updateCables(); window.triggerUpdate(); } } });
+    }
+
+    items.forEach(item => {
+        const btn = document.createElement('button');
+        btn.style.cssText = 'display:block; width:100%; text-align:left; background:none; border:none; color:#eee; padding:8px 12px; cursor:pointer; font-size:0.85rem; border-bottom:1px solid #333;';
+        btn.textContent = item.label;
+        btn.onpointerdown = () => { item.fn(); menu.remove(); };
+        menu.appendChild(btn);
+    });
+
+    document.body.appendChild(menu);
+    setTimeout(() => {
+        document.addEventListener('pointerdown', () => menu.remove(), { once: true });
+    }, 0);
+}
 
 // THREE.JS PREVIEW LOGIC
 window.initThreePreview = function(id) {
@@ -1444,6 +1537,9 @@ window.updateThreePreview = function(pid) {
 
 // KEYBOARD SHORTCUTS
 document.addEventListener('keydown', (e) => {
+    if(e.code === 'Tab' && document.activeElement.id !== 'quick-add-search') {
+        e.preventDefault(); window.openQuickAdd();
+    }
     if(e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
         e.preventDefault(); spaceDown = true; viewport.style.cursor = 'grab';
     }
@@ -1457,6 +1553,10 @@ document.addEventListener('keydown', (e) => {
         e.preventDefault();
         const selected = document.querySelector('.node.selected');
         if(selected) window.duplicateNode(selected.id);
+    }
+    if(e.key === 'Escape') {
+        document.getElementById('quick-add-modal').style.display = 'none';
+        document.getElementById('history-modal').style.display = 'none';
     }
     if(e.key === 'Delete' || e.key === 'Backspace') {
         if(document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {

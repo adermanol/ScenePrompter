@@ -18,13 +18,21 @@
         <img src="assets/logo.png" alt="DRMNL Studio" style="height:25px; filter: invert(1) opacity(0.7); transition: 0.2s;" onmouseover="this.style.filter='invert(1) opacity(1) drop-shadow(0 0 10px rgba(255,255,255,0.5))'" onmouseout="this.style.filter='invert(1) opacity(0.7)'">
     </a>
     <div class="top-nav">
+        <button class="nav-btn" style="border-color:#999" onpointerdown="window.undo()" title="Geri Al (Ctrl+Z)">↶ Undo</button>
+        <button class="nav-btn" style="border-color:#999" onpointerdown="window.redo()" title="Tekrar (Ctrl+Y)">↷ Redo</button>
+        <div style="width: 1px; background: #333; margin: 0 5px;"></div>
+        <button class="nav-btn" style="border-color:#55ff99; font-weight:bold" onpointerdown="window.openQuickAdd()" title="Hızlı Ekle (Tab)">+ Ekle</button>
+        <div style="width: 1px; background: #333; margin: 0 5px;"></div>
         <button class="nav-btn" onpointerdown="createNode('render')">Render</button>
         <button class="nav-btn" onpointerdown="createNode('light')">Light</button>
         <button class="nav-btn" onpointerdown="createNode('camera')">Camera</button>
         <button class="nav-btn" style="border-color:#55ff55" onpointerdown="createNode('scene')">Scene</button>
         <button class="nav-btn" style="border-color:#ff55ff" onpointerdown="createNode('style')">Style</button>
         <button class="nav-btn" style="border-color:#ffff55" onpointerdown="createNode('character')">Character</button>
+        <button class="nav-btn" style="border-color:#ffcc00" onpointerdown="createNode('quadruped')">🐾 Quadruped</button>
+        <button class="nav-btn" style="border-color:#aaff55" onpointerdown="createNode('insect')">🐞 Insect</button>
         <button class="nav-btn" style="border-color:var(--accent-sec)" onpointerdown="createNode('object')">Object</button>
+        <button class="nav-btn" style="border-color:#55ff99" onpointerdown="createNode('customloc')">📍 Location</button>
         <button class="nav-btn" style="border-color:#ff9955" onpointerdown="createNode('shot')">Shot Type</button>
         <button class="nav-btn" style="border-color:#ff9955" onpointerdown="createNode('cammove')">Movement</button>
         <button class="nav-btn" style="border-color:#55ccff" onpointerdown="createNode('atmos')">Atmosphere</button>
@@ -58,6 +66,15 @@
             <button onclick="clearHistory()" style="background:#551111; color:#fff; border:1px solid #ff5555; padding:8px 16px; border-radius:4px; cursor:pointer; margin-right:10px;">Clear History</button>
             <button onclick="exportHistory()" style="background:#115511; color:#fff; border:1px solid #55ff55; padding:8px 16px; border-radius:4px; cursor:pointer;">Export as .txt</button>
         </div>
+    </div>
+
+    <div id="quick-add-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90vw; max-width:500px; max-height:70vh; background:#1a1a1a; border:1px solid #444; border-radius:8px; z-index:3500; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.8); display:flex; flex-direction:column;">
+        <div style="padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; color:#eee; font-size:1rem;">+ Hızlı Ekle</h3>
+            <button onclick="document.getElementById('quick-add-modal').style.display='none'" style="background:none; border:none; color:#fff; cursor:pointer; font-size:1.2rem;">&times;</button>
+        </div>
+        <input type="text" id="quick-add-search" placeholder="Node tipi ara..." style="background:#111; color:#eee; border:1px solid #333; padding:10px; margin:10px; font-size:0.9rem; border-radius:4px;" oninput="window.filterQuickAdd(this.value)">
+        <div id="quick-add-list" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:8px;"></div>
     </div>
 
     <div id="minimap"><div id="mini-vp" class="mini-vp"></div></div>
