@@ -35,8 +35,29 @@ path {
     animation: flux 0.4s linear infinite; filter: drop-shadow(0 0 5px var(--accent));
     pointer-events: auto; cursor: pointer; opacity: 0.8; transition: stroke-width 0.1s;
 }
-path:hover { stroke-width: 6px; opacity: 1; z-index: 999; }
-path.active-cable { stroke: var(--accent); stroke-width: 4px; filter: drop-shadow(0 0 8px var(--accent)); z-index: 20; }
+path:hover { stroke-width: 6px; opacity: 1; }
+path.active-cable { stroke: var(--accent); stroke-width: 4px; filter: drop-shadow(0 0 8px var(--accent)); }
+
+/* Each cable = <g> holding a fat invisible hit path + the visible path.
+   The hit path carries all pointer events so touch has a 26px target. */
+.cable-group .cable-hit {
+    stroke: transparent; stroke-width: 26px; stroke-dasharray: none;
+    animation: none; filter: none; opacity: 1;
+    pointer-events: stroke; cursor: pointer;
+}
+.cable-group .cable { pointer-events: none; }
+.cable-group:hover .cable { stroke-width: 6px; opacity: 1; }
+.cable-group .cable.cable-selected {
+    stroke: var(--accent-sec); stroke-width: 5px; opacity: 1;
+    filter: drop-shadow(0 0 8px var(--accent-sec));
+}
+
+/* Drop-target affordance while dragging a cable */
+.socket-wrapper.valid-target .socket {
+    border-color: #55ff99; background: #55ff99;
+    box-shadow: 0 0 12px #55ff99; scale: 1.4;
+}
+.socket-wrapper.invalid-target .socket { opacity: 0.15; }
 
 /* NODES */
 .node {

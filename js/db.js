@@ -153,5 +153,25 @@ const DB = {
     lightGel: ["None", "CTO (Warm)", "CTB (Cool)", "Red", "Blue", "Green", "Magenta", "Cyan", "Yellow"],
     colLut: ["Teal & Orange", "Bleach Bypass", "Cross Process", "Day for Night", "Desaturated", "High Contrast", "Vintage"],
     colStock: ["Digital Clean", "Kodak Portra 400", "Kodak Gold 200", "Cinestill 800T", "Fujifilm Superia", "Ilford HP5 (B&W)", "Kodak Vision3 500T"],
-    compRule: ["Rule of Thirds", "Golden Ratio", "Center Symmetry", "Frame within a Frame", "Leading Lines", "Dutch Angle"]
+    compRule: ["Rule of Thirds", "Golden Ratio", "Center Symmetry", "Frame within a Frame", "Leading Lines", "Dutch Angle"],
+
+    // --- CUSTOM LOCATION ---
+    locEnv: ["Interior", "Exterior", "Underground", "Underwater", "Aerial / Sky", "Outer Space", "Mixed Interior/Exterior"],
+    locArch: ["Undefined", "Brutalist Concrete", "Gothic Stone", "Industrial / Factory", "Organic / Natural", "Art Deco", "Modernist Glass", "Ancient Ruins", "Futuristic / Sci-fi", "Rustic Wooden", "Slum / Shanty", "Baroque Ornate", "Minimalist"],
+    locSurface: ["Undefined", "Wet Asphalt", "Dry Sand", "Lush Grass", "Polished Marble", "Thick Mud", "Fresh Snow", "Metal Grating", "Shallow Water", "Cracked Concrete", "Cobblestone", "Rich Soil", "Volcanic Rock"],
+    locScale: ["Cramped / Claustrophobic", "Intimate", "Room-sized", "Spacious", "Vast / Cavernous", "Endless / Infinite Horizon"],
+
+    // --- QUADRUPED (four-legged animals) ---
+    quadSpecies: ["Dog", "Wolf", "Horse", "Lion", "Tiger", "Bear", "Deer / Stag", "Domestic Cat", "Elephant", "Bull / Cattle", "Fox", "Leopard", "Cheetah", "Rhinoceros", "Goat", "Boar", "Camel", "Bison"],
+    quadSize: ["Tiny", "Small", "Medium", "Large", "Massive"],
+    quadCoat: ["Sleek Fur", "Shaggy / Thick Fur", "Muddy / Matted", "Scarred / Battle-worn", "Wet / Dripping", "Groomed / Glossy", "Armored / Plated", "Mangy / Diseased"],
+    quadAction: ["Standing Alert", "Prowling / Stalking", "Trotting", "Galloping", "Charging", "Leaping", "Resting / Lying Down", "Hunting", "Rearing Up", "Fighting / Clashing", "Grazing", "Snarling"],
+    quadMood: ["Calm", "Aggressive", "Fearful / Skittish", "Playful", "Wounded", "Majestic / Regal", "Feral / Wild", "Loyal / Docile"],
+
+    // --- INSECT ---
+    insectSpecies: ["Butterfly", "Honeybee", "Ant", "Spider", "Beetle", "Dragonfly", "Moth", "Grasshopper", "Praying Mantis", "Firefly", "Wasp", "Ladybug", "Scorpion", "Centipede", "Cicada", "Locust", "Cockroach"],
+    insectScale: ["Extreme Macro Close-up", "Life-size Detail", "Swarm / Distant Cloud"],
+    insectCount: ["Single Specimen", "A Few", "Cluster", "Swarm", "Massive Infestation"],
+    insectBehavior: ["Crawling", "Flying", "Hovering", "Swarming", "Feeding", "Building / Nesting", "Fighting", "Emerging / Metamorphosis", "Still / Camouflaged", "Skittering"],
+    insectSurface: ["On a Leaf", "On Human Skin", "On a Flower", "On Decaying Matter", "On a Spiderweb", "In Mid-air Flight", "On Bare Ground", "On Tree Bark", "On Water Surface"]
 };

@@ -1,0 +1,12 @@
+{
+  "name": "sceneprompter",
+  "version": "1.0.0",
+  "description": "Node-based cinematic AI video prompt editor",
+  "private": true,
+  "scripts": {
+    "test": "node tests/editor.test.js && node tests/promptEngine.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

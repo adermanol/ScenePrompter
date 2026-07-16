@@ -7,6 +7,7 @@ window.undoStack = [];
 window.redoStack = [];
 window.selectedNodes = new Set();
 window.selectMode = false;
+window.selectedCable = null;
 const MAX_HISTORY = 50;
 let isRestoring = false;
 
@@ -27,6 +28,7 @@ window.threePreviews = {};
 viewport.addEventListener('pointerdown', (e) => {
     if(!spaceDown && (e.target.closest('.node-content') || e.target.closest('.top-nav'))) return;
     if(spaceDown || e.target === viewport || e.target.classList.contains('grid-layer')) {
+        if(window.clearCableSelection) window.clearCableSelection();
         activePointers.push(e);
         if (activePointers.length === 1) {
             isPanning = true; 
@@ -150,6 +152,7 @@ function getSpatialContextHTML(id) {
 }
 
 window.createNode = function(type) {
+    captureState();   // snapshot the canvas as it was, before this node exists
     window.nodeIdCounter++;
     const id = 'node_' + window.nodeIdCounter;
     const cx = (-worldState.x + window.innerWidth/2)/worldState.zoom - 130;
@@ -470,8 +473,6 @@ window.createNode = function(type) {
     el.addEventListener('pointerdown', (e) => startLongPress(e, id, 'node'));
     el.addEventListener('pointerup', cancelLongPress);
     el.addEventListener('pointerleave', cancelLongPress);
-
-    captureState();
 }
 
 window.toggleLight = function(id) {
@@ -591,7 +592,7 @@ function highlightCables(nid) {
     window.cables.forEach(c => {
         if(c.from === nid || c.to === nid) {
             c.path.classList.add('active-cable');
-            svgLayer.appendChild(c.path);
+            if(c.g) svgLayer.appendChild(c.g);
         }
     });
 }
@@ -612,20 +613,113 @@ function nodeUp() {
     document.removeEventListener('pointerup', nodeUp); 
 }
 
+// --- CABLE CREATION / SELECTION (single source of truth) ---
+window.createCable = function(fromId, toId) {
+    // Never wire the same pair twice — guards against a re-entrant preset load
+    // or a restore racing a pending timeout.
+    const existing = window.cables.find(c => c.from === fromId && c.to === toId);
+    if(existing) return existing;
+
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute('class', 'cable-group');
+    const hit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    hit.setAttribute('class', 'cable-hit');
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute('class', 'cable');
+    g.appendChild(hit); g.appendChild(path);
+    svgLayer.appendChild(g);
+
+    const nc = { from: fromId, to: toId, path, hit, g };
+
+    hit.addEventListener('dblclick', () => removeCable(nc));
+    hit.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        selectCable(nc);
+        startLongPress(e, nc, 'cable');
+    });
+    hit.addEventListener('pointerup', cancelLongPress);
+    hit.addEventListener('pointerleave', cancelLongPress);
+
+    window.cables.push(nc);
+    return nc;
+};
+
+// Drop every cable, DOM included. Assigning `window.cables = []` alone leaks the
+// SVG groups, which then linger as invisible click targets.
+function clearAllCables() {
+    window.cables.forEach(c => { const el = c.g || c.path; if(el) el.remove(); });
+    window.cables = [];
+    window.selectedCable = null;
+}
+
+function removeCable(nc) {
+    captureState();   // snapshot before the cable is gone
+    nc.g.remove();
+    window.cables = window.cables.filter(c => c !== nc);
+    if(window.selectedCable === nc) window.selectedCable = null;
+    updateCables();
+    window.triggerUpdate();
+}
+
+function selectCable(nc) {
+    clearCableSelection();
+    window.selectedCable = nc;
+    nc.path.classList.add('cable-selected');
+}
+
+function clearCableSelection() {
+    if(window.selectedCable) window.selectedCable.path.classList.remove('cable-selected');
+    window.selectedCable = null;
+}
+window.clearCableSelection = clearCableSelection;
+
+// Show which input sockets will accept the cable being dragged.
+function markDropTargets(srcId) {
+    const srcType = window.nodes[srcId]?.type;
+    document.querySelectorAll('.socket-wrapper.in').forEach(w => {
+        const toId = w.getAttribute('data-node');
+        if(!toId || toId === srcId) return;
+        const dstType = window.nodes[toId]?.type;
+        const ok = srcType && dstType && isValidConnection(srcType, dstType);
+        w.classList.add(ok ? 'valid-target' : 'invalid-target');
+    });
+}
+
+function clearDropTargets() {
+    document.querySelectorAll('.socket-wrapper.in').forEach(w => {
+        w.classList.remove('valid-target', 'invalid-target');
+    });
+}
+
+// Touch-friendly: land on a socket directly, or snap to the nearest one.
+function findDropTarget(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const direct = el ? el.closest('.socket-wrapper.in') : null;
+    if(direct) return direct;
+    let best = null, bestDist = 48;
+    document.querySelectorAll('.socket-wrapper.in').forEach(w => {
+        const r = w.getBoundingClientRect();
+        const d = Math.hypot(clientX - (r.left + r.width/2), clientY - (r.top + r.height/2));
+        if(d < bestDist) { bestDist = d; best = w; }
+    });
+    return best;
+}
+
 let activeCable = null;
 window.sockDown = function(e, id) {
-    e.stopPropagation(); 
+    e.stopPropagation();
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    svgLayer.appendChild(path); 
+    svgLayer.appendChild(path);
     activeCable = { from: id, path };
-    document.addEventListener('pointermove', cabMove); 
+    markDropTargets(id);
+    document.addEventListener('pointermove', cabMove);
     document.addEventListener('pointerup', cabUp);
 }
 
 function cabMove(e) {
     if(!activeCable) return;
     const n = window.nodes[activeCable.from];
-    const sx = parseFloat(n.el.style.left) + n.el.offsetWidth; 
+    const sx = parseFloat(n.el.style.left) + n.el.offsetWidth;
     const sy = parseFloat(n.el.style.top) + (n.el.offsetHeight/2);
     const mx = (e.clientX - worldState.x)/worldState.zoom;
     const my = (e.clientY - worldState.y)/worldState.zoom;
@@ -640,53 +734,46 @@ function isValidConnection(srcType, dstType) {
     return false;
 }
 
-function cabUp(e) { 
+function cabUp(e) {
     if(!activeCable) return;
-    const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-    const wrapperIn = targetEl ? targetEl.closest('.socket-wrapper.in') : null;
-    
+    const wrapperIn = findDropTarget(e.clientX, e.clientY);
+
     if (wrapperIn) {
         const toId = wrapperIn.getAttribute('data-node');
         if (toId && activeCable.from !== toId) {
             const srcNode = window.nodes[activeCable.from];
             const dstNode = window.nodes[toId];
-            
+            const dupe = window.cables.some(c => c.from === activeCable.from && c.to === toId);
+
             if (srcNode && dstNode && !isValidConnection(srcNode.type, dstNode.type)) {
                 const nEl = document.getElementById(dstNode.id);
                 nEl.style.boxShadow = "0 0 15px red";
                 setTimeout(() => { nEl.style.boxShadow = "none"; }, 400);
-            } else {
-                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                svgLayer.appendChild(path);
-                const nc = { from: activeCable.from, to: toId, path };
-                path.addEventListener('dblclick', () => { 
-                    path.remove(); window.cables = window.cables.filter(c => c !== nc); window.triggerUpdate(); 
-                });
-                nc.path.addEventListener('pointerdown', (e) => startLongPress(e, nc.path, 'cable'));
-                nc.path.addEventListener('pointerup', cancelLongPress);
-                nc.path.addEventListener('pointerleave', cancelLongPress);
-                window.cables.push(nc);
+            } else if (!dupe) {
+                captureState();   // snapshot before the new cable exists
+                window.createCable(activeCable.from, toId);
                 updateCables();
                 window.triggerUpdate();
-                captureState();
             }
         }
     }
+    clearDropTargets();
     activeCable.path.remove();
-    activeCable = null; 
-    document.removeEventListener('pointermove', cabMove); 
-    document.removeEventListener('pointerup', cabUp); 
+    activeCable = null;
+    document.removeEventListener('pointermove', cabMove);
+    document.removeEventListener('pointerup', cabUp);
 }
 
 function updateCables() {
     window.cables.forEach(c => {
         const n1 = window.nodes[c.from]; const n2 = window.nodes[c.to];
         if(!n1 || !n2) return;
-        const x1 = parseFloat(n1.el.style.left) + n1.el.offsetWidth; 
+        const x1 = parseFloat(n1.el.style.left) + n1.el.offsetWidth;
         const y1 = parseFloat(n1.el.style.top) + (n1.el.offsetHeight/2);
-        const x2 = parseFloat(n2.el.style.left); 
+        const x2 = parseFloat(n2.el.style.left);
         const y2 = parseFloat(n2.el.style.top) + (n2.el.offsetHeight/2);
         drawCurve(c.path, x1, y1, x2, y2);
+        if(c.hit) drawCurve(c.hit, x1, y1, x2, y2);
     });
 }
 
@@ -695,8 +782,9 @@ function drawCurve(path, x1, y1, x2, y2) {
     path.setAttribute('d', `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
 }
 
-function captureState() {
-    if(isRestoring) return;
+// Single source of truth for "what does the workspace look like right now".
+// Used by undo/redo history AND by save/load.
+function serializeWorkspace() {
     const state = { nodes: {}, cables: [], counter: window.nodeIdCounter };
     for(let id in window.nodes) {
         const n = window.nodes[id];
@@ -704,45 +792,50 @@ function captureState() {
         n.el.querySelectorAll('input, select, textarea').forEach(el => {
             if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
         });
-        state.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, state: nodeState };
+        state.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, zoom: n.zoom, state: nodeState };
     }
     state.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
+    return state;
+}
+
+// Snapshot the state BEFORE a mutation, so undo has somewhere to go back to.
+// Every mutating action must call this first, while the old state is still live.
+function captureState() {
+    if(isRestoring) return;
     window.redoStack = [];
-    window.undoStack.unshift(state);
+    window.undoStack.unshift(serializeWorkspace());
     if(window.undoStack.length > MAX_HISTORY) window.undoStack.pop();
 }
 
 function restoreState(state) {
     isRestoring = true;
     Object.keys(window.nodes).forEach(id => window.kill(id));
+    clearAllCables();   // drop anything kill() could not match
 
-    window.nodeIdCounter = state.counter;
     for(let id in state.nodes) {
-        window.nodeIdCounter = Math.max(window.nodeIdCounter, parseInt(id.split('_')[1]));
         const d = state.nodes[id];
+        // createNode derives its id from ++nodeIdCounter, so seed the counter one
+        // below the id we want back. Setting it to the id itself yields node_N+1,
+        // which silently orphans every cable pointing at node_N.
+        window.nodeIdCounter = parseInt(id.split('_')[1]) - 1;
         window.createNode(d.type);
         const n = window.nodes[id];
         if(n) {
             n.el.style.left = d.x;
             n.el.style.top = d.y;
+            n.zoom = d.zoom || 1;
             for(let key in d.state) {
                 const el = document.getElementById(key);
-                if(el) el.value = d.state[key];
+                if(el) {
+                    if(el.type === 'checkbox') el.checked = d.state[key];
+                    else el.value = d.state[key];
+                }
             }
             if(n.type === 'light') window.toggleLight(id);
         }
     }
-    state.cables.forEach(c => {
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        svgLayer.appendChild(path);
-        const nc = { from: c.from, to: c.to, path };
-        path.addEventListener('dblclick', () => {
-            path.remove();
-            window.cables = window.cables.filter(cb => cb !== nc);
-            window.triggerUpdate();
-        });
-        window.cables.push(nc);
-    });
+    window.nodeIdCounter = state.counter;   // put the counter back where it was
+    state.cables.forEach(c => window.createCable(c.from, c.to));
     updateCables();
     window.triggerUpdate();
     window.updateMinimap();
@@ -751,45 +844,25 @@ function restoreState(state) {
 
 window.undo = function() {
     if(window.undoStack.length === 0) return window.showToast('Undo geçmişi boş');
-    const current = { nodes: {}, cables: [] };
-    for(let id in window.nodes) {
-        const n = window.nodes[id];
-        const nodeState = {};
-        n.el.querySelectorAll('input, select, textarea').forEach(el => {
-            if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
-        });
-        current.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, state: nodeState };
-    }
-    current.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
-    current.counter = window.nodeIdCounter;
-    window.redoStack.unshift(current);
-    const prev = window.undoStack.shift();
-    restoreState(prev);
+    // Serialize directly (not captureState) so the redo stack survives.
+    window.redoStack.unshift(serializeWorkspace());
+    restoreState(window.undoStack.shift());
     window.showToast('Geri alındı');
 };
 
 window.redo = function() {
     if(window.redoStack.length === 0) return window.showToast('Redo geçmişi boş');
-    const current = { nodes: {}, cables: [] };
-    for(let id in window.nodes) {
-        const n = window.nodes[id];
-        const nodeState = {};
-        n.el.querySelectorAll('input, select, textarea').forEach(el => {
-            if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
-        });
-        current.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, state: nodeState };
-    }
-    current.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
-    current.counter = window.nodeIdCounter;
-    window.undoStack.unshift(current);
-    const next = window.redoStack.shift();
-    restoreState(next);
+    window.undoStack.unshift(serializeWorkspace());
+    restoreState(window.redoStack.shift());
     window.showToast('Tekrar edildi');
 };
 
 window.duplicateNode = function(id) {
     const src = window.nodes[id];
     if(!src) return;
+    captureState();   // snapshot before the copy exists
+    const wasRestoring = isRestoring;
+    isRestoring = true;   // the copy is one step, not two
     window.nodeIdCounter++;
     const newId = 'node_' + window.nodeIdCounter;
     const el = document.createElement('div');
@@ -810,25 +883,27 @@ window.duplicateNode = function(id) {
         }
     });
 
+    isRestoring = wasRestoring;
     if(src.type === 'light') window.toggleLight(newId);
     window.triggerUpdate();
-    captureState();
     window.showToast('Node çoğaltıldı');
 };
 
 window.kill = function(id) {
     if(window.nodes[id]) {
+        captureState();   // snapshot before the node and its cables disappear
         if(window.nodes[id].resizeObs) window.nodes[id].resizeObs.disconnect();
         window.nodes[id].el.remove();
         delete window.nodes[id];
         window.cables = window.cables.filter(c => {
             if(c.from === id || c.to === id){
-                c.path.remove(); return false;
+                if(window.selectedCable === c) window.selectedCable = null;
+                (c.g || c.path).remove();
+                return false;
             }
             return true;
         });
         if(!isRestoring) {
-            captureState();
             window.triggerUpdate();
             window.updateMinimap();
         }
@@ -837,18 +912,8 @@ window.kill = function(id) {
 
 // SAVE & LOAD
 window.saveWorkspace = function() {
-    window.undoStack = []; window.redoStack = [];
-    const data = { nodes: {}, cables: [] };
-    for(let id in window.nodes) {
-        const n = window.nodes[id];
-        const state = {};
-        n.el.querySelectorAll('input, select, textarea').forEach(el => {
-            if(el.id) state[el.id] = el.type === 'checkbox' ? el.checked : el.value;
-        });
-        data.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, zoom: n.zoom, state };
-    }
-    data.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
-    
+    // Saving is not a mutation — it must not touch the undo history.
+    const data = serializeWorkspace();
     const jsonStr = JSON.stringify(data);
     localStorage.setItem('scene_save', jsonStr);
     
@@ -873,9 +938,11 @@ window.loadWorkspaceData = function(str) {
     } catch(e) {
         return window.showToast("Invalid save file!");
     }
+    isRestoring = true;   // loading a workspace is one atomic act, not undo steps
     window.undoStack = []; window.redoStack = [];
     Object.keys(window.nodes).forEach(id => window.kill(id));
-    
+    clearAllCables();
+
     let maxId = 0;
     for(let oldId in data.nodes) {
         const num = parseInt(oldId.split('_')[1]);
@@ -900,17 +967,11 @@ window.loadWorkspaceData = function(str) {
     }
     window.nodeIdCounter = maxId;
     
-    data.cables.forEach(c => {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        svgLayer.appendChild(path);
-        const nc = { from: c.from, to: c.to, path };
-        path.addEventListener('dblclick', () => { 
-            path.remove(); window.cables = window.cables.filter(cb => cb !== nc); window.triggerUpdate(); 
-        });
-        window.cables.push(nc);
-    });
-    
+    data.cables.forEach(c => window.createCable(c.from, c.to));
+
     updateCables(); window.triggerUpdate(); window.updateMinimap();
+    isRestoring = false;   // workspace fully rebuilt; start recording undo again
+    window.undoStack = []; window.redoStack = [];
     window.showToast("Workspace Loaded!");
 }
 
@@ -931,10 +992,16 @@ window.loadWorkspace = function() {
     input.click();
 }
 
+let presetTimer = null;
 window.loadPreset = function(name) {
     if(!name) return;
+    // A previous preset may still have its cable-wiring timeout pending; drop it
+    // or its cables land on top of the canvas we are about to build.
+    if(presetTimer) { clearTimeout(presetTimer); presetTimer = null; }
+    isRestoring = true;   // building a preset is one atomic act, not undo steps
     Object.keys(window.nodes).forEach(id => window.kill(id));
-    window.nodeIdCounter = 0; window.cables = [];
+    clearAllCables();
+    window.nodeIdCounter = 0;
     window.undoStack = []; window.redoStack = [];
     worldState = { x: 0, y: 0, zoom: 1 };
     window.updateWorld();
@@ -959,18 +1026,17 @@ window.loadPreset = function(name) {
 
         window.createNode('stack'); let stk = window.nodes['node_5']; stk.el.style.left = '800px'; stk.el.style.top = '300px';
         
-        setTimeout(() => {
-            const conn = (f, t) => {
-                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                svgLayer.appendChild(path);
-                const nc = { from: f, to: t, path };
-                path.addEventListener('dblclick', () => { path.remove(); window.cables = window.cables.filter(cb => cb !== nc); window.triggerUpdate(); });
-                window.cables.push(nc);
-            };
+        presetTimer = setTimeout(() => {
+            presetTimer = null;
+            const conn = (f, t) => window.createCable(f, t);
             conn('node_1', 'node_5'); conn('node_2', 'node_5'); conn('node_3', 'node_5'); conn('node_4', 'node_5');
             updateCables(); window.triggerUpdate(); window.updateMinimap();
+            isRestoring = false;   // preset is fully built; start recording undo again
+            window.undoStack = []; window.redoStack = [];
             window.showToast("Cyberpunk Preset Loaded");
         }, 50);
+    } else {
+        isRestoring = false;
     }
     document.getElementById('preset_sel').value = "";
 }
@@ -988,7 +1054,20 @@ window.showToast = function(msg) {
 }
 
 // TOOLS & EXPORTS
-window.resetStack = function(id) { window.cables = window.cables.filter(c => c.to !== id); updateCables(); window.triggerUpdate(); }
+window.resetStack = function(id) {
+    if(!window.cables.some(c => c.to === id)) return;
+    captureState();   // snapshot before the cables are gone
+    window.cables = window.cables.filter(c => {
+        if(c.to === id) {
+            if(window.selectedCable === c) window.selectedCable = null;
+            (c.g || c.path).remove();
+            return false;
+        }
+        return true;
+    });
+    updateCables();
+    window.triggerUpdate();
+}
 window.copyStack = function(id) {
     const ta = document.getElementById(`val_${id}`);
     if(!ta) return;
@@ -1120,7 +1199,7 @@ function showContextMenu(e, id, type) {
         items.push({ label: '✏️ Seç', fn: () => { document.querySelectorAll('.node').forEach(n => n.classList.remove('selected')); document.getElementById(id).classList.add('selected'); } });
         items.push({ label: '🗑️ Sil', fn: () => { window.kill(id); window.showToast('Node deleted'); } });
     } else if(type === 'cable') {
-        items.push({ label: '🗑️ Bağlantıyı sil', fn: () => { const c = window.cables.find(cb => cb.path === id); if(c) { c.path.remove(); window.cables = window.cables.filter(cb => cb !== c); updateCables(); window.triggerUpdate(); } } });
+        items.push({ label: '🗑️ Bağlantıyı sil', fn: () => removeCable(id) });
     }
 
     items.forEach(item => {
@@ -1627,10 +1706,14 @@ document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape') {
         document.getElementById('quick-add-modal').style.display = 'none';
         document.getElementById('history-modal').style.display = 'none';
+        clearCableSelection();
     }
     if(e.key === 'Delete' || e.key === 'Backspace') {
         if(document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-            if(window.selectMode && window.selectedNodes.size > 0) {
+            if(window.selectedCable) {
+                removeCable(window.selectedCable);
+                window.showToast('Bağlantı silindi');
+            } else if(window.selectMode && window.selectedNodes.size > 0) {
                 window.deleteSelected();
             } else {
                 const selected = document.querySelector('.node.selected');
