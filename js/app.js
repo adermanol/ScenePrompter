@@ -1,15 +1,19 @@
 // Standard script mode, DB and promptEngine are loaded globally.
 
 window.nodeIdCounter = 0;
-window.nodes = {}; 
+window.nodes = {};
 window.cables = [];
+window.undoStack = [];
+window.redoStack = [];
+const MAX_HISTORY = 50;
+let isRestoring = false;
 
 const viewport = document.getElementById('viewport');
 const world = document.getElementById('world');
 const svgLayer = document.getElementById('svg-layer');
 
 let worldState = { x: 0, y: 0, zoom: 1 };
-let isPanning = false; 
+let isPanning = false;
 let panStart = { x: 0, y: 0 };
 let activePointers = [];
 let initialDist = 0;
@@ -347,6 +351,58 @@ window.createNode = function(type) {
         hasIn = false; title = "OBJECT";
         content = `<input type="text" class="obj-input" id="val_${id}" placeholder="OBJECT NAME" oninput="triggerUpdate()">${getSpatialContextHTML(id)}`;
     }
+    else if (type === 'quadruped') {
+        hasIn = false; hasOut = true; title = "QUADRUPED";
+        content = `
+            <div style="font-size:0.6rem; color:#666">SPECIES</div>
+            <select id="quad_spec_${id}" onchange="triggerUpdate()">${DB.quadSpecies.map(o=>`<option>${o}</option>`).join('')}</select>
+            <input type="text" class="obj-input" id="quad_cust_${id}" placeholder="Custom breed / name (optional)" oninput="triggerUpdate()" style="margin-top:5px">
+            <div style="display:flex; gap:5px; margin-top:5px">
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">SIZE</div><select id="quad_size_${id}" onchange="triggerUpdate()">${DB.quadSize.map(o=>`<option ${o==='Medium'?'selected':''}>${o}</option>`).join('')}</select></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">COAT</div><select id="quad_coat_${id}" onchange="triggerUpdate()">${DB.quadCoat.map(o=>`<option>${o}</option>`).join('')}</select></div>
+            </div>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">ACTION</div>
+            <select id="quad_act_${id}" onchange="triggerUpdate()">${DB.quadAction.map(o=>`<option>${o}</option>`).join('')}</select>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">TEMPERAMENT</div>
+            <select id="quad_mood_${id}" onchange="triggerUpdate()">${DB.quadMood.map(o=>`<option>${o}</option>`).join('')}</select>
+            <input type="text" class="obj-input" id="quad_note_${id}" placeholder="Custom notes" oninput="triggerUpdate()" style="margin-top:5px">
+            ${getSpatialContextHTML(id)}
+        `;
+    }
+    else if (type === 'insect') {
+        hasIn = false; hasOut = true; title = "INSECT";
+        content = `
+            <div style="font-size:0.6rem; color:#666">SPECIES</div>
+            <select id="ins_spec_${id}" onchange="triggerUpdate()">${DB.insectSpecies.map(o=>`<option>${o}</option>`).join('')}</select>
+            <input type="text" class="obj-input" id="ins_cust_${id}" placeholder="Custom species (optional)" oninput="triggerUpdate()" style="margin-top:5px">
+            <div style="display:flex; gap:5px; margin-top:5px">
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">SCALE</div><select id="ins_scale_${id}" onchange="triggerUpdate()">${DB.insectScale.map(o=>`<option>${o}</option>`).join('')}</select></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">COUNT</div><select id="ins_count_${id}" onchange="triggerUpdate()">${DB.insectCount.map(o=>`<option>${o}</option>`).join('')}</select></div>
+            </div>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">BEHAVIOR</div>
+            <select id="ins_beh_${id}" onchange="triggerUpdate()">${DB.insectBehavior.map(o=>`<option>${o}</option>`).join('')}</select>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">ON SURFACE</div>
+            <select id="ins_surf_${id}" onchange="triggerUpdate()">${DB.insectSurface.map(o=>`<option>${o}</option>`).join('')}</select>
+            <input type="text" class="obj-input" id="ins_note_${id}" placeholder="Custom notes" oninput="triggerUpdate()" style="margin-top:5px">
+            ${getSpatialContextHTML(id)}
+        `;
+    }
+    else if (type === 'customloc') {
+        hasIn = false; hasOut = true; title = "CUSTOM LOCATION";
+        content = `
+            <input type="text" class="obj-input" id="loc_name_${id}" placeholder="LOCATION NAME (e.g. rusted freighter deck)" oninput="triggerUpdate()">
+            <div style="display:flex; gap:5px; margin-top:5px">
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">ENVIRONMENT</div><select id="loc_env_${id}" onchange="triggerUpdate()">${DB.locEnv.map(o=>`<option>${o}</option>`).join('')}</select></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">SCALE</div><select id="loc_scale_${id}" onchange="triggerUpdate()">${DB.locScale.map(o=>`<option ${o==='Spacious'?'selected':''}>${o}</option>`).join('')}</select></div>
+            </div>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">ARCHITECTURE / STYLE</div>
+            <select id="loc_arch_${id}" onchange="triggerUpdate()">${DB.locArch.map(o=>`<option>${o}</option>`).join('')}</select>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">GROUND / SURFACE</div>
+            <select id="loc_surf_${id}" onchange="triggerUpdate()">${DB.locSurface.map(o=>`<option>${o}</option>`).join('')}</select>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">KEY FEATURES</div>
+            <textarea id="loc_feat_${id}" rows="2" placeholder="hanging cables, flickering neon signs, scattered debris..." oninput="triggerUpdate()" style="width:100%; padding:4px; background:#111; color:#eee; border:1px solid #333; border-radius:4px; font-size:0.75rem; margin-top:2px; resize:none;"></textarea>
+        `;
+    }
     else if (type === 'position') {
         hasIn = true; hasOut = true; title = "POSITION";
         content = `
@@ -408,6 +464,7 @@ window.createNode = function(type) {
     world.appendChild(el);
     window.nodes[id] = { id, type, el, zoom: 1 };
     new ResizeObserver(() => updateCables()).observe(el);
+    captureState();
 }
 
 window.toggleLight = function(id) {
@@ -460,9 +517,11 @@ window.triggerUpdate = function() {
         let name = '';
         if (n.type === 'character') name = document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
         else if (n.type === 'object') name = document.getElementById(`val_${n.id}`)?.value || 'Object';
+        else if (n.type === 'quadruped') name = document.getElementById(`quad_cust_${n.id}`)?.value || document.getElementById(`quad_spec_${n.id}`)?.value || 'Animal';
+        else if (n.type === 'insect') name = document.getElementById(`ins_cust_${n.id}`)?.value || document.getElementById(`ins_spec_${n.id}`)?.value || 'Insect';
         else if (n.type === 'light') name = 'Light';
         else if (n.type === 'camera') name = 'Camera';
-        
+
         if (name) {
             targets.push({ id: n.id, name: `${name} (${n.id.substring(0,4)})`, rawName: name });
         }
@@ -564,8 +623,8 @@ function cabMove(e) {
 function isValidConnection(srcType, dstType) {
     if (dstType === 'sequence') return srcType === 'stack';
     if (dstType === 'stack') return srcType !== 'position' && srcType !== 'sequence';
-    if (dstType === 'preview') return ['position', 'character', 'object', 'light', 'stack'].includes(srcType);
-    if (dstType === 'position') return ['character', 'object', 'light', 'camera'].includes(srcType);
+    if (dstType === 'preview') return ['position', 'character', 'object', 'quadruped', 'insect', 'customloc', 'light', 'stack'].includes(srcType);
+    if (dstType === 'position') return ['character', 'object', 'quadruped', 'insect', 'light', 'camera'].includes(srcType);
     return false;
 }
 
@@ -592,12 +651,13 @@ function cabUp(e) {
                     path.remove(); window.cables = window.cables.filter(c => c !== nc); window.triggerUpdate(); 
                 });
                 window.cables.push(nc);
-                updateCables(); 
+                updateCables();
                 window.triggerUpdate();
+                captureState();
             }
         }
     }
-    activeCable.path.remove(); 
+    activeCable.path.remove();
     activeCable = null; 
     document.removeEventListener('pointermove', cabMove); 
     document.removeEventListener('pointerup', cabUp); 
@@ -620,24 +680,149 @@ function drawCurve(path, x1, y1, x2, y2) {
     path.setAttribute('d', `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`);
 }
 
-window.kill = function(id) { 
+function captureState() {
+    if(isRestoring) return;
+    const state = { nodes: {}, cables: [], counter: window.nodeIdCounter };
+    for(let id in window.nodes) {
+        const n = window.nodes[id];
+        const nodeState = {};
+        n.el.querySelectorAll('input, select, textarea').forEach(el => {
+            if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        state.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, state: nodeState };
+    }
+    state.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
+    window.redoStack = [];
+    window.undoStack.unshift(state);
+    if(window.undoStack.length > MAX_HISTORY) window.undoStack.pop();
+}
+
+function restoreState(state) {
+    isRestoring = true;
+    Object.keys(window.nodes).forEach(id => window.kill(id));
+
+    window.nodeIdCounter = state.counter;
+    for(let id in state.nodes) {
+        window.nodeIdCounter = Math.max(window.nodeIdCounter, parseInt(id.split('_')[1]));
+        const d = state.nodes[id];
+        window.createNode(d.type);
+        const n = window.nodes[id];
+        if(n) {
+            n.el.style.left = d.x;
+            n.el.style.top = d.y;
+            for(let key in d.state) {
+                const el = document.getElementById(key);
+                if(el) el.value = d.state[key];
+            }
+            if(n.type === 'light') window.toggleLight(id);
+        }
+    }
+    state.cables.forEach(c => {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        svgLayer.appendChild(path);
+        const nc = { from: c.from, to: c.to, path };
+        path.addEventListener('dblclick', () => {
+            path.remove();
+            window.cables = window.cables.filter(cb => cb !== nc);
+            window.triggerUpdate();
+        });
+        window.cables.push(nc);
+    });
+    updateCables();
+    window.triggerUpdate();
+    window.updateMinimap();
+    isRestoring = false;
+}
+
+window.undo = function() {
+    if(window.undoStack.length === 0) return window.showToast('Undo geçmişi boş');
+    const current = { nodes: {}, cables: [] };
+    for(let id in window.nodes) {
+        const n = window.nodes[id];
+        const nodeState = {};
+        n.el.querySelectorAll('input, select, textarea').forEach(el => {
+            if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        current.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, state: nodeState };
+    }
+    current.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
+    current.counter = window.nodeIdCounter;
+    window.redoStack.unshift(current);
+    const prev = window.undoStack.shift();
+    restoreState(prev);
+    window.showToast('Geri alındı');
+};
+
+window.redo = function() {
+    if(window.redoStack.length === 0) return window.showToast('Redo geçmişi boş');
+    const current = { nodes: {}, cables: [] };
+    for(let id in window.nodes) {
+        const n = window.nodes[id];
+        const nodeState = {};
+        n.el.querySelectorAll('input, select, textarea').forEach(el => {
+            if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        current.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, state: nodeState };
+    }
+    current.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
+    current.counter = window.nodeIdCounter;
+    window.undoStack.unshift(current);
+    const next = window.redoStack.shift();
+    restoreState(next);
+    window.showToast('Tekrar edildi');
+};
+
+window.duplicateNode = function(id) {
+    const src = window.nodes[id];
+    if(!src) return;
+    window.nodeIdCounter++;
+    const newId = 'node_' + window.nodeIdCounter;
+    const el = document.createElement('div');
+    el.className = src.el.className;
+    el.id = newId;
+    el.style.left = (parseFloat(src.el.style.left) + 30) + 'px';
+    el.style.top = (parseFloat(src.el.style.top) + 30) + 'px';
+    el.innerHTML = src.el.innerHTML.replace(/id="/g, 'id="').replace(/_${id}/g, `_${newId}`);
+    world.appendChild(el);
+    window.nodes[newId] = { id: newId, type: src.type, el, zoom: src.zoom };
+    new ResizeObserver(() => updateCables()).observe(el);
+
+    src.el.querySelectorAll('input, select, textarea').forEach(oldEl => {
+        if(oldEl.id) {
+            const newElId = oldEl.id.replace(src.id, newId);
+            const newEl = el.querySelector(`#${newElId}`);
+            if(newEl) newEl.value = oldEl.type === 'checkbox' ? oldEl.checked : oldEl.value;
+        }
+    });
+
+    if(src.type === 'light') window.toggleLight(newId);
+    window.triggerUpdate();
+    captureState();
+    window.showToast('Node çoğaltıldı');
+};
+
+window.kill = function(id) {
     if(window.nodes[id]) {
         if(window.nodes[id].resizeObs) window.nodes[id].resizeObs.disconnect();
-        window.nodes[id].el.remove(); 
-        delete window.nodes[id]; 
+        window.nodes[id].el.remove();
+        delete window.nodes[id];
         window.cables = window.cables.filter(c => {
             if(c.from === id || c.to === id){
                 c.path.remove(); return false;
-            } 
+            }
             return true;
-        }); 
-        window.triggerUpdate(); 
-        window.updateMinimap();
+        });
+        if(!isRestoring) {
+            captureState();
+            window.triggerUpdate();
+            window.updateMinimap();
+        }
     }
 }
 
 // SAVE & LOAD
 window.saveWorkspace = function() {
+    window.undoStack = []; window.redoStack = [];
     const data = { nodes: {}, cables: [] };
     for(let id in window.nodes) {
         const n = window.nodes[id];
@@ -648,14 +833,32 @@ window.saveWorkspace = function() {
         data.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, zoom: n.zoom, state };
     }
     data.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
-    localStorage.setItem('scene_save', JSON.stringify(data));
-    window.showToast("Workspace Saved!");
+    
+    const jsonStr = JSON.stringify(data);
+    localStorage.setItem('scene_save', jsonStr);
+    
+    const blob = new Blob([jsonStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'workspace_save.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    window.showToast("Workspace Saved & Downloaded!");
 }
 
-window.loadWorkspace = function() {
-    const str = localStorage.getItem('scene_save');
+window.loadWorkspaceData = function(str) {
     if(!str) return window.showToast("No save found!");
-    const data = JSON.parse(str);
+    let data;
+    try {
+        data = JSON.parse(str);
+    } catch(e) {
+        return window.showToast("Invalid save file!");
+    }
+    window.undoStack = []; window.redoStack = [];
     Object.keys(window.nodes).forEach(id => window.kill(id));
     
     let maxId = 0;
@@ -696,10 +899,28 @@ window.loadWorkspace = function() {
     window.showToast("Workspace Loaded!");
 }
 
+window.loadWorkspace = function() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = e => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            window.loadWorkspaceData(ev.target.result);
+            localStorage.setItem('scene_save', ev.target.result);
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
 window.loadPreset = function(name) {
     if(!name) return;
     Object.keys(window.nodes).forEach(id => window.kill(id));
     window.nodeIdCounter = 0; window.cables = [];
+    window.undoStack = []; window.redoStack = [];
     worldState = { x: 0, y: 0, zoom: 1 };
     window.updateWorld();
 
@@ -895,6 +1116,8 @@ window.updateThreePreview = function(pid) {
                     let name = '';
                     if (n.type === 'character') name = document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
                     else if (n.type === 'object') name = document.getElementById(`val_${n.id}`)?.value || 'Object';
+                    else if (n.type === 'quadruped') name = document.getElementById(`quad_cust_${n.id}`)?.value || document.getElementById(`quad_spec_${n.id}`)?.value || 'Animal';
+                    else if (n.type === 'insect') name = document.getElementById(`ins_cust_${n.id}`)?.value || document.getElementById(`ins_spec_${n.id}`)?.value || 'Insect';
                     else if (n.type === 'light') name = 'Light';
                     else if (n.type === 'camera') name = 'Camera';
                     if (name === advTgt && n.id !== node.id) {
@@ -925,6 +1148,15 @@ window.updateThreePreview = function(pid) {
             }
         } else if (node.type === 'object') {
             labelText = document.getElementById(`val_${node.id}`)?.value || 'OBJECT';
+        } else if (node.type === 'quadruped') {
+            const spec = document.getElementById(`quad_cust_${node.id}`)?.value || document.getElementById(`quad_spec_${node.id}`)?.value || 'ANIMAL';
+            labelText = "🐾 " + spec;
+        } else if (node.type === 'insect') {
+            const spec = document.getElementById(`ins_cust_${node.id}`)?.value || document.getElementById(`ins_spec_${node.id}`)?.value || 'INSECT';
+            const cnt = document.getElementById(`ins_count_${node.id}`)?.value || '';
+            labelText = "🐞 " + spec + (cnt && cnt !== 'Single Specimen' ? ` (${cnt})` : '');
+        } else if (node.type === 'customloc') {
+            labelText = "📍 " + (document.getElementById(`loc_name_${node.id}`)?.value || 'LOCATION');
         }
 
         if(labelText && node.type !== 'scene' && node.type !== 'position') {
@@ -966,6 +1198,99 @@ window.updateThreePreview = function(pid) {
             mesh.position.set(x, y + 5, z);
             preview.scene.add(mesh);
             preview.objects.push(mesh);
+        }
+        else if (node.type === 'quadruped') {
+            const sizeMap = { 'Tiny': 0.4, 'Small': 0.7, 'Medium': 1.0, 'Large': 1.5, 'Massive': 2.3 };
+            const moodColor = {
+                'Aggressive': 0xaa3322, 'Feral / Wild': 0x774422, 'Majestic / Regal': 0xccaa44,
+                'Wounded': 0x662222, 'Fearful / Skittish': 0x8899aa, 'Playful': 0xcc8855,
+                'Calm': 0x997755, 'Loyal / Docile': 0x886644
+            };
+            const size = sizeMap[document.getElementById(`quad_size_${node.id}`)?.value] || 1.0;
+            const col = moodColor[document.getElementById(`quad_mood_${node.id}`)?.value] || 0x997755;
+            const g = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({color: col});
+            const body = new THREE.Mesh(new THREE.BoxGeometry(18, 7, 8), mat);
+            body.position.y = 12;
+            g.add(body);
+            const neck = new THREE.Mesh(new THREE.BoxGeometry(5, 8, 5), mat);
+            neck.position.set(9, 15, 0); neck.rotation.z = -0.5;
+            g.add(neck);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(7, 5, 5), mat);
+            head.position.set(13, 18, 0);
+            g.add(head);
+            [[7,3],[7,-3],[-7,3],[-7,-3]].forEach(([lx,lz]) => {
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1, 12, 8), mat);
+                leg.position.set(lx, 6, lz);
+                g.add(leg);
+            });
+            const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.4, 9, 6), mat);
+            tail.position.set(-10, 13, 0); tail.rotation.z = 0.9;
+            g.add(tail);
+            g.scale.setScalar(size);
+            g.position.set(x, y, z);
+            preview.scene.add(g);
+            preview.objects.push(g);
+        }
+        else if (node.type === 'insect') {
+            const scaleMap = { 'Extreme Macro Close-up': 1.2, 'Life-size Detail': 0.55, 'Swarm / Distant Cloud': 0.35 };
+            const s = scaleMap[document.getElementById(`ins_scale_${node.id}`)?.value] || 0.6;
+            const cnt = document.getElementById(`ins_count_${node.id}`)?.value || 'Single Specimen';
+            const swarmN = cnt === 'Massive Infestation' ? 12 : cnt === 'Swarm' ? 8 : cnt === 'Cluster' ? 4 : cnt === 'A Few' ? 2 : 1;
+            const bodyMat = new THREE.MeshStandardMaterial({color: 0x223322});
+            const wingMat = new THREE.MeshStandardMaterial({color: 0xaaccdd, transparent: true, opacity: 0.4, side: THREE.DoubleSide});
+            const buildBug = () => {
+                const g = new THREE.Group();
+                const abdomen = new THREE.Mesh(new THREE.SphereGeometry(3, 10, 10), bodyMat); abdomen.position.x = -3; abdomen.scale.x = 1.6;
+                const thorax = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 10), bodyMat);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), bodyMat); head.position.x = 3;
+                g.add(abdomen); g.add(thorax); g.add(head);
+                const wingL = new THREE.Mesh(new THREE.CircleGeometry(4, 12), wingMat); wingL.position.set(0, 1, 3); wingL.rotation.x = -0.6;
+                const wingR = new THREE.Mesh(new THREE.CircleGeometry(4, 12), wingMat); wingR.position.set(0, 1, -3); wingR.rotation.x = Math.PI + 0.6;
+                g.add(wingL); g.add(wingR);
+                g.scale.setScalar(s);
+                return g;
+            };
+            for (let i = 0; i < swarmN; i++) {
+                const b = buildBug();
+                if (swarmN === 1) {
+                    b.position.set(x, y + 8, z);
+                } else {
+                    const seed = (i * 73 % 40) - 20;
+                    const seed2 = (i * 129 % 40) - 20;
+                    const seed3 = (i * 191 % 30) - 5;
+                    b.position.set(x + seed, y + 8 + seed3, z + seed2);
+                    b.rotation.y = i * 0.9;
+                }
+                preview.scene.add(b);
+                preview.objects.push(b);
+            }
+        }
+        else if (node.type === 'customloc') {
+            const envColor = {
+                'Interior': 0x443322, 'Exterior': 0x224433, 'Underground': 0x222228,
+                'Underwater': 0x113344, 'Aerial / Sky': 0x3366aa, 'Outer Space': 0x080812,
+                'Mixed Interior/Exterior': 0x333322
+            };
+            const scaleMap = { 'Cramped / Claustrophobic': 60, 'Intimate': 90, 'Room-sized': 120, 'Spacious': 170, 'Vast / Cavernous': 240, 'Endless / Infinite Horizon': 340 };
+            const env = document.getElementById(`loc_env_${node.id}`)?.value || 'Exterior';
+            const sz = scaleMap[document.getElementById(`loc_scale_${node.id}`)?.value] || 170;
+            const col = envColor[env] || 0x333333;
+            const plane = new THREE.Mesh(
+                new THREE.PlaneGeometry(sz, sz),
+                new THREE.MeshStandardMaterial({color: col, transparent: true, opacity: 0.3, side: THREE.DoubleSide})
+            );
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.set(0, 0.2, 0);
+            preview.scene.add(plane);
+            preview.objects.push(plane);
+            const box = new THREE.Mesh(
+                new THREE.BoxGeometry(sz, sz * 0.5, sz),
+                new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.25})
+            );
+            box.position.set(0, sz * 0.25, 0);
+            preview.scene.add(box);
+            preview.objects.push(box);
         }
         else if (node.type === 'light') {
             const mode = document.getElementById(`mode_${node.id}`)?.value || 'industrial';
@@ -1122,6 +1447,17 @@ document.addEventListener('keydown', (e) => {
     if(e.code === 'Space' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
         e.preventDefault(); spaceDown = true; viewport.style.cursor = 'grab';
     }
+    if((e.ctrlKey || e.metaKey) && e.key === 'z' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault(); window.undo();
+    }
+    if((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z')) && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault(); window.redo();
+    }
+    if((e.ctrlKey || e.metaKey) && e.key === 'd' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const selected = document.querySelector('.node.selected');
+        if(selected) window.duplicateNode(selected.id);
+    }
     if(e.key === 'Delete' || e.key === 'Backspace') {
         if(document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
             const selected = document.querySelector('.node.selected');
@@ -1136,7 +1472,7 @@ document.addEventListener('keyup', (e) => {
 
 window.onload = () => {
     if(localStorage.getItem('scene_save')) {
-        window.loadWorkspace();
+        window.loadWorkspaceData(localStorage.getItem('scene_save'));
     } else {
         window.loadPreset('cyberpunk');
         window.showToast("Welcome! Loaded Cyberpunk Demo");
