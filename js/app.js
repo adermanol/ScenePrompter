@@ -349,8 +349,16 @@ window.createNode = function(type) {
                     <option value="medium distance (3m)">Medium (3m)</option>
                     <option value="far distance (10m)">Far (10m)</option>
                 </select></div>
-            </div>`;
-        setTimeout(() => { if(window.updateCamFlavor) window.updateCamFlavor(id); }, 0);
+            </div>
+            ${getSpatialContextHTML(id)}`;
+        setTimeout(() => {
+            if(window.updateCamFlavor) window.updateCamFlavor(id);
+            // A camera is a physical object in the scene like a light is, but it
+            // had no spatial fields — so it always sat at the world origin and
+            // could not be placed. Default it in front of the scene at eye level.
+            const v = document.getElementById(`vpos_${id}`);
+            if(v) v.value = 'eye_level';
+        }, 0);
     }
     else if (type === 'object') {
         hasIn = false; title = "OBJECT";
@@ -393,7 +401,18 @@ window.createNode = function(type) {
             <div class="viewport-3d" id="v3d_${id}" style="resize: both; overflow: hidden; min-width: 250px; min-height: 200px; width: 350px; height: 320px;">
                 <div id="three_${id}" style="width:100%; height:100%; position:relative;"></div>
             </div>
-            <div style="text-align:center; font-size:0.6rem; color:#666">Three.js Engine</div>
+            <!-- Through-the-lens: what the connected camera node actually frames -->
+            <div id="ttl_wrap_${id}" style="display:none; margin-top:6px;">
+                <div style="font-size:0.6rem; color:#666; margin-bottom:2px;">THROUGH THE LENS</div>
+                <div class="viewport-3d" id="ttl_${id}" style="width:100%; height:180px; min-height:120px; resize:vertical; overflow:hidden;"></div>
+            </div>
+            <div style="display:flex; gap:5px; margin-top:5px;">
+                <button class="btn-tool" id="ttl_btn_${id}" onpointerdown="toggleLensView('${id}')" title="Kameranın gördüğü kare">🎥 LENS</button>
+                <button class="btn-tool" onpointerdown="playCameraMove('${id}')" title="Kamera hareketini oynat">▶ HAREKET</button>
+            </div>
+            <div id="v3d_hint_${id}" style="text-align:center; font-size:0.6rem; color:#666; margin-top:4px;">
+                Objeyi sürükleyerek konumlandır
+            </div>
         `;
         setTimeout(() => initThreePreview(id), 50);
     }
@@ -1323,7 +1342,29 @@ function showContextMenu(e, id, type) {
     }, 0);
 }
 
-// THREE.JS PREVIEW LOGIC
+// ---------------------------------------------------------------------------
+// THREE.JS PREVIEW
+//
+// Two views of one scene: an orbit view for staging, and a "through the lens"
+// view that renders from the connected camera node with its real focal length.
+// The orbit camera keeps its own FOV — the lens FOV belongs to the lens view.
+// ---------------------------------------------------------------------------
+
+// Spatial dropdowns <-> world coordinates. SPATIAL_BUCKETS is the single source
+// of truth for both directions, so dragging in 3D and picking from the dropdown
+// can never disagree.
+const SPATIAL_BUCKETS = {
+    hpos:  { far_left: -80, camera_left: -40, center: 0, camera_right: 40, far_right: 80 },
+    depth: { extreme_fg: 80, foreground: 40, midground: 0, background: -40, far_bg: -80, horizon: -150 },
+    vpos:  { below: -20, ground: 0, eye_level: 25, above: 45, overhead: 80 },
+};
+
+function nearestBucket(kind, value) {
+    const b = SPATIAL_BUCKETS[kind];
+    return Object.keys(b).reduce((best, k) =>
+        Math.abs(b[k] - value) < Math.abs(b[best] - value) ? k : best, Object.keys(b)[0]);
+}
+
 window.initThreePreview = function(id) {
     const container = document.getElementById(`three_${id}`);
     if(!container || !window.THREE) return;
@@ -1331,6 +1372,8 @@ window.initThreePreview = function(id) {
     const camera = new THREE.PerspectiveCamera(50, container.clientWidth/container.clientHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
     const labelContainer = document.createElement('div');
@@ -1344,28 +1387,72 @@ window.initThreePreview = function(id) {
     const grid = new THREE.GridHelper(200, 20);
     scene.add(grid);
 
+    // Invisible floor so cast shadows have something to land on.
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(400, 400),
+        new THREE.ShadowMaterial({ opacity: 0.35 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
     camera.position.set(0, 50, 150);
     camera.lookAt(0,0,0);
 
     const orbit = new THREE.OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
 
-    window.threePreviews[id] = { scene, camera, renderer, orbit, objects: [], labels: [], labelContainer };
+    // --- through-the-lens view (hidden until toggled) ---
+    const ttlBox = document.getElementById(`ttl_${id}`);
+    let ttlRenderer = null;
+    const ttlCamera = new THREE.PerspectiveCamera(40, 16/9, 0.1, 2000);
+    if(ttlBox) {
+        ttlRenderer = new THREE.WebGLRenderer({ antialias: true });
+        ttlRenderer.setSize(ttlBox.clientWidth || 300, ttlBox.clientHeight || 180);
+        ttlBox.appendChild(ttlRenderer.domElement);
+    }
+
+    const preview = {
+        scene, camera, renderer, orbit, objects: [], labels: [], labelContainer,
+        floor, grid,
+        ttlRenderer, ttlCamera, ttlBox, ttlOn: false,
+        lens: null,      // {pos, target, fov, action} published by the camera node
+        play: null,      // active camera-move playback
+        id,
+    };
+    window.threePreviews[id] = preview;
 
     const resizeObserver = new ResizeObserver(() => {
         if(container.clientWidth === 0) return;
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
+        if(ttlRenderer && ttlBox && ttlBox.clientWidth) {
+            ttlCamera.aspect = ttlBox.clientWidth / ttlBox.clientHeight;
+            ttlCamera.updateProjectionMatrix();
+            ttlRenderer.setSize(ttlBox.clientWidth, ttlBox.clientHeight);
+        }
     });
     resizeObserver.observe(container.parentElement);
+    if(ttlBox) resizeObserver.observe(ttlBox);
+
+    attachSceneDrag(preview, container);
 
     const animate = function() {
         requestAnimationFrame(animate);
         orbit.update();
         renderer.render(scene, camera);
 
-        const preview = window.threePreviews[id];
+        if(preview.ttlOn && ttlRenderer) {
+            positionLensCamera(preview);
+            // The camera's own body sits exactly where the lens is, so without
+            // this the lens view renders the inside of its own housing — a
+            // black frame. A real camera does not see itself.
+            if(preview.camMesh) preview.camMesh.visible = false;
+            ttlRenderer.render(scene, ttlCamera);
+            if(preview.camMesh) preview.camMesh.visible = true;
+        }
+
         preview.labels.forEach(l => {
             const pos = l.pos.clone();
             pos.project(camera);
@@ -1379,6 +1466,142 @@ window.initThreePreview = function(id) {
     animate();
 }
 
+// Place the lens camera for this frame, honouring an in-progress move playback.
+function positionLensCamera(preview) {
+    const lens = preview.lens;
+    const cam = preview.ttlCamera;
+    if(!lens) return;
+
+    const target = new THREE.Vector3(lens.target.x, lens.target.y, lens.target.z);
+    let pos = new THREE.Vector3(lens.pos.x, lens.pos.y, lens.pos.z);
+
+    if(preview.play) {
+        const p = preview.play;
+        const t = Math.min(1, (performance.now() - p.t0) / p.duration);
+        if(t >= 1) preview.play = null;
+        const offset = pos.clone().sub(target);
+        if(p.kind === 'orbit') {
+            const a = t * Math.PI * 2;
+            const r = Math.hypot(offset.x, offset.z);
+            pos = new THREE.Vector3(target.x + Math.sin(a) * r, pos.y, target.z + Math.cos(a) * r);
+        } else if(p.kind === 'dolly_in') {
+            pos = target.clone().add(offset.multiplyScalar(1 - 0.75 * t));
+        } else if(p.kind === 'dolly_out') {
+            pos = target.clone().add(offset.multiplyScalar(1 + 1.5 * t));
+        } else if(p.kind === 'follow') {
+            // Target drifts; camera holds its offset and stays locked on.
+            target.add(new THREE.Vector3(Math.sin(t * Math.PI * 2) * 25, 0, 0));
+            pos = target.clone().add(offset);
+        }
+    }
+
+    cam.position.copy(pos);
+    cam.lookAt(target);
+    if(cam.fov !== lens.fov) { cam.fov = lens.fov; cam.updateProjectionMatrix(); }
+}
+
+window.toggleLensView = function(id) {
+    const p = window.threePreviews[id];
+    const wrap = document.getElementById(`ttl_wrap_${id}`);
+    const btn = document.getElementById(`ttl_btn_${id}`);
+    if(!p || !wrap) return;
+    p.ttlOn = !p.ttlOn;
+    wrap.style.display = p.ttlOn ? 'block' : 'none';
+    if(btn) {
+        btn.style.borderColor = p.ttlOn ? 'var(--accent)' : '#333';
+        btn.style.color = p.ttlOn ? 'var(--accent)' : '#aaa';
+    }
+    if(p.ttlOn && !p.lens) window.showToast('Bir Camera node bagla');
+    if(p.ttlOn && p.ttlRenderer && p.ttlBox && p.ttlBox.clientWidth) {
+        p.ttlCamera.aspect = p.ttlBox.clientWidth / p.ttlBox.clientHeight;
+        p.ttlCamera.updateProjectionMatrix();
+        p.ttlRenderer.setSize(p.ttlBox.clientWidth, p.ttlBox.clientHeight);
+    }
+};
+
+window.playCameraMove = function(id) {
+    const p = window.threePreviews[id];
+    if(!p) return;
+    if(!p.lens) return window.showToast('Bir Camera node bagla');
+    const kind = p.lens.action;
+    if(!kind || kind === 'none') return window.showToast('Kamerada ADVANCED TRACKING ayarla');
+    if(!p.ttlOn) window.toggleLensView(id);
+    p.play = { kind, t0: performance.now(), duration: 3000 };
+    window.showToast(kind.replace('_', ' ') + ' oynatiliyor');
+};
+
+// Drag a subject on the ground plane; snap to the nearest spatial bucket and
+// write it back to the dropdowns, so the 3D view and the fields stay in sync.
+function attachSceneDrag(preview, container) {
+    const canvas = preview.renderer.domElement;
+    const ray = new THREE.Raycaster();
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    let dragId = null;
+
+    const ndc = e => {
+        const r = canvas.getBoundingClientRect();
+        return new THREE.Vector2(
+            ((e.clientX - r.left) / r.width) * 2 - 1,
+            -((e.clientY - r.top) / r.height) * 2 + 1
+        );
+    };
+    const nodeIdAt = e => {
+        ray.setFromCamera(ndc(e), preview.camera);
+        const hits = ray.intersectObjects(preview.objects, true);
+        for(const h of hits) {
+            let o = h.object;
+            while(o) { if(o.userData && o.userData.nodeId) return o.userData.nodeId; o = o.parent; }
+        }
+        return null;
+    };
+
+    canvas.addEventListener('pointerdown', e => {
+        const nid = nodeIdAt(e);
+        // Only nodes that expose spatial fields can be placed this way.
+        if(!nid || !document.getElementById(`hpos_${nid}`)) return;
+        dragId = nid;
+        preview.orbit.enabled = false;   // don't spin the view while placing
+        canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', e => {
+        if(!dragId) return;
+        ray.setFromCamera(ndc(e), preview.camera);
+        const hit = new THREE.Vector3();
+        if(!ray.ray.intersectPlane(plane, hit)) return;
+        const h = document.getElementById(`hpos_${dragId}`);
+        const d = document.getElementById(`depth_${dragId}`);
+        if(!h || !d) return;
+        const nh = nearestBucket('hpos', hit.x);
+        const nd = nearestBucket('depth', hit.z);
+        if(h.value !== nh || d.value !== nd) {
+            h.value = nh; d.value = nd;
+            window.triggerUpdate();
+        }
+    });
+
+    const end = e => {
+        if(!dragId) return;
+        dragId = null;
+        preview.orbit.enabled = true;
+        if(canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+            canvas.releasePointerCapture(e.pointerId);
+        }
+    };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+}
+
+// Mark an object (and everything under it) as belonging to a node, so a raycast
+// hit on any child resolves back to the node — and make it cast shadows.
+function tagForPicking(obj, nodeId) {
+    obj.userData.nodeId = nodeId;
+    obj.traverse(o => {
+        o.userData.nodeId = nodeId;
+        if(o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+    });
+}
+
 window.updateThreePreview = function(pid) {
     const preview = window.threePreviews[pid];
     if(!preview) return;
@@ -1388,36 +1611,35 @@ window.updateThreePreview = function(pid) {
     preview.labels = [];
     preview.labelContainer.innerHTML = '';
     preview.scene.background = new THREE.Color(0x1a1a1a);
+    // Rebuilt below only if a camera node is still connected; otherwise the lens
+    // view would keep aiming from a camera that no longer exists.
+    preview.lens = null;
+    preview.camMesh = null;
 
     const inputs = window.cables.filter(c => c.to === pid);
 
+    // Reads straight off SPATIAL_BUCKETS — the same table nearestBucket() uses to
+    // go the other way when you drag an object, so the two can never disagree.
     const getSpatialCoords = (id) => {
-        let x=0, y=0, z=0;
-        const h = document.getElementById(`hpos_${id}`)?.value || 'center';
-        const v = document.getElementById(`vpos_${id}`)?.value || 'ground';
-        const d = document.getElementById(`depth_${id}`)?.value || 'midground';
-        
-        if(h === 'far_left') x = -80;
-        else if(h === 'camera_left') x = -40;
-        else if(h === 'camera_right') x = 40;
-        else if(h === 'far_right') x = 80;
-
-        if(v === 'eye_level') y = 25; 
-        else if(v === 'above') y = 45;
-        else if(v === 'overhead') y = 80;
-        else if(v === 'below') y = -20;
-        
-        if(d === 'extreme_fg') z = 80;
-        else if(d === 'foreground') z = 40; 
-        else if(d === 'background') z = -40;
-        else if(d === 'far_bg') z = -80;
-        else if(d === 'horizon') z = -150;
-        return {x, y, z};
+        const pick = (kind, fallback) => {
+            const v = document.getElementById(`${kind}_${id}`)?.value || fallback;
+            const b = SPATIAL_BUCKETS[kind];
+            return b[v] !== undefined ? b[v] : b[fallback];
+        };
+        return {
+            x: pick('hpos', 'center'),
+            y: pick('vpos', 'ground'),
+            z: pick('depth', 'midground'),
+        };
     };
 
     const renderNodeIn3D = (node, customCoords = null) => {
         const coords = customCoords || getSpatialCoords(node.id);
         const {x, y, z} = coords;
+
+        // Set by the camera branch below once it resolves its tracking target;
+        // the lens view then aims at the same point the dashed line points to.
+        let camTarget = null;
 
         const hSel = document.getElementById(`hpos_${node.id}`);
         const vSel = document.getElementById(`vpos_${node.id}`);
@@ -1466,6 +1688,8 @@ window.updateThreePreview = function(pid) {
                         tx = tc.x; ty = tc.y; tz = tc.z;
                     }
                     
+                    camTarget = { x: tx, y: ty + 15, z: tz };   // lens view aims here too
+
                     const points = [new THREE.Vector3(x, y + 15, z), new THREE.Vector3(tx, ty + 15, tz)];
                     const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
                     const lineMat = new THREE.LineDashedMaterial({ color: 0xff00ff, dashSize: 2, gapSize: 2 });
@@ -1512,6 +1736,7 @@ window.updateThreePreview = function(pid) {
             head.position.y = 18;
             charGroup.add(body); charGroup.add(head);
             charGroup.position.set(x, y, z);
+            tagForPicking(charGroup, node.id);
             preview.scene.add(charGroup);
             preview.objects.push(charGroup);
         }
@@ -1520,6 +1745,7 @@ window.updateThreePreview = function(pid) {
             const mat = new THREE.MeshStandardMaterial({color: 0xaaaaaa});
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, y + 5, z);
+            tagForPicking(mesh, node.id);
             preview.scene.add(mesh);
             preview.objects.push(mesh);
         }
@@ -1528,6 +1754,7 @@ window.updateThreePreview = function(pid) {
             // is the subject's ground point.
             const g = SUBJECTS[node.type].mesh(readSubject(node.type, node.id), THREE);
             g.position.set(x, y, z);
+            tagForPicking(g, node.id);
             preview.scene.add(g);
             preview.objects.push(g);
         }
@@ -1547,15 +1774,38 @@ window.updateThreePreview = function(pid) {
             );
             plane.rotation.x = -Math.PI / 2;
             plane.position.set(0, 0.2, 0);
+            plane.receiveShadow = true;
             preview.scene.add(plane);
             preview.objects.push(plane);
-            const box = new THREE.Mesh(
-                new THREE.BoxGeometry(sz, sz * 0.5, sz),
-                new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.25})
-            );
-            box.position.set(0, sz * 0.25, 0);
-            preview.scene.add(box);
-            preview.objects.push(box);
+
+            // Enclosed environments get three solid walls (the fourth is left
+            // open — it is where the camera lives). Open ones stay a wireframe
+            // volume so they don't box the scene in.
+            const enclosed = ['Interior', 'Underground'].includes(env);
+            if(enclosed) {
+                const h = sz * 0.5;
+                const wallMat = new THREE.MeshStandardMaterial({
+                    color: col, side: THREE.DoubleSide, transparent: true, opacity: 0.55,
+                });
+                const walls = new THREE.Group();
+                const back = new THREE.Mesh(new THREE.PlaneGeometry(sz, h), wallMat);
+                back.position.set(0, h / 2, -sz / 2);
+                const left = new THREE.Mesh(new THREE.PlaneGeometry(sz, h), wallMat);
+                left.rotation.y = Math.PI / 2; left.position.set(-sz / 2, h / 2, 0);
+                const right = new THREE.Mesh(new THREE.PlaneGeometry(sz, h), wallMat);
+                right.rotation.y = -Math.PI / 2; right.position.set(sz / 2, h / 2, 0);
+                [back, left, right].forEach(w => { w.receiveShadow = true; walls.add(w); });
+                preview.scene.add(walls);
+                preview.objects.push(walls);
+            } else {
+                const box = new THREE.Mesh(
+                    new THREE.BoxGeometry(sz, sz * 0.5, sz),
+                    new THREE.MeshBasicMaterial({color: col, wireframe: true, transparent: true, opacity: 0.25})
+                );
+                box.position.set(0, sz * 0.25, 0);
+                preview.scene.add(box);
+                preview.objects.push(box);
+            }
         }
         else if (node.type === 'light') {
             const mode = document.getElementById(`mode_${node.id}`)?.value || 'industrial';
@@ -1594,7 +1844,11 @@ window.updateThreePreview = function(pid) {
             
             const pl = new THREE.PointLight(color, intensity, 300);
             pl.position.set(x, y + 20, z);
-            
+            // Gel and colour temperature now actually fall on the scene.
+            pl.castShadow = true;
+            pl.shadow.mapSize.set(1024, 1024);
+            pl.shadow.bias = -0.005;
+
             if(mode === 'industrial') {
                 preview.scene.add(lightGroup); preview.objects.push(lightGroup);
             } else {
@@ -1610,10 +1864,20 @@ window.updateThreePreview = function(pid) {
         }
         else if (node.type === 'camera') {
             const mm = parseFloat(document.getElementById(`mm_in_${node.id}`)?.value || 50);
+            // 24mm is the Super35 sensor height; this is the vertical FOV.
             const fov = 2 * Math.atan(24 / (2 * mm)) * (180 / Math.PI);
-            preview.camera.fov = fov;
-            preview.camera.updateProjectionMatrix();
-            
+
+            // Publish the lens for the through-the-lens view. This used to
+            // overwrite the orbit camera's FOV, which made the staging view
+            // zoom whenever you changed focal length — the lens FOV belongs to
+            // the lens view.
+            preview.lens = {
+                pos: { x, y: y + 15, z },
+                target: camTarget || { x: 0, y: 10, z: 0 },
+                fov,
+                action: document.getElementById(`cam_adv_act_${node.id}`)?.value || 'none',
+            };
+
             const camGroup = new THREE.Group();
             const bodyGeo = new THREE.BoxGeometry(8, 8, 12);
             const bodyMat = new THREE.MeshStandardMaterial({color: 0x222222});
@@ -1625,8 +1889,10 @@ window.updateThreePreview = function(pid) {
             lens.position.z = 6;
             camGroup.add(body); camGroup.add(lens);
             camGroup.position.set(x, y + 15, z);
-            camGroup.lookAt(0, 10, 0);
-            
+            camGroup.lookAt(camTarget ? new THREE.Vector3(camTarget.x, camTarget.y, camTarget.z)
+                                      : new THREE.Vector3(0, 10, 0));
+
+            preview.camMesh = camGroup;   // hidden while rendering the lens view
             preview.scene.add(camGroup);
             preview.objects.push(camGroup);
         }
@@ -1665,6 +1931,12 @@ window.updateThreePreview = function(pid) {
             if (addSun) {
                 const dl = new THREE.DirectionalLight(sunColor, 1.5);
                 dl.position.set(sunX, sunY, sunZ);
+                // Sun casts too — this is what makes time-of-day read in 3D.
+                dl.castShadow = true;
+                dl.shadow.mapSize.set(2048, 2048);
+                Object.assign(dl.shadow.camera,
+                    { left: -150, right: 150, top: 150, bottom: -150, near: 1, far: 600 });
+                dl.shadow.bias = -0.002;
                 const sunGeo = new THREE.SphereGeometry(12, 16, 16);
                 const sunMat = new THREE.MeshBasicMaterial({color: sunColor});
                 const sunMesh = new THREE.Mesh(sunGeo, sunMat);

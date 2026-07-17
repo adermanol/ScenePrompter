@@ -31,6 +31,8 @@ const src = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js', 'js/app.js']
 window.eval(src + '\n;window.SUBJECTS = SUBJECTS;'
                 + '\n;window.SUBJECT_TYPES = SUBJECT_TYPES;'
                 + '\n;window.PRESETS = PRESETS;'
+                + '\n;window.SPATIAL_BUCKETS = SPATIAL_BUCKETS;'
+                + '\n;window.nearestBucket = nearestBucket;'
                 + '\n;window.serializeWorkspace = serializeWorkspace;');
 
 const doc = window.document;
@@ -244,6 +246,61 @@ async function main() {
   window.loadPreset('noir');
   await wait(150);
   check('preset sonrası undo geçmişi boş', window.undoStack.length, 0);
+
+  console.log('\n=== 15. Faz 4: spatial bucket dönüşümü (3D sürükleme) ===');
+  // Dragging in 3D maps a world coordinate back to a dropdown value. Round-trip
+  // must be exact, or dragging an object would nudge it to a different bucket.
+  const B = window.SPATIAL_BUCKETS;
+  const near = window.nearestBucket;
+  check('bucket tablosu 3 eksen', Object.keys(B).sort().join(','), 'depth,hpos,vpos');
+  ['hpos', 'depth', 'vpos'].forEach(kind => {
+    const wrong = Object.keys(B[kind]).filter(k => near(kind, B[kind][k]) !== k);
+    check(`${kind}: her bucket kendi değerine geri dönüyor`, wrong, []);
+  });
+  check('tam ortadaki değer en yakına gidiyor', near('hpos', -39), 'camera_left');
+  check('aralık dışı sola taşan sola kilitleniyor', near('hpos', -500), 'far_left');
+  check('aralık dışı sağa taşan sağa kilitleniyor', near('hpos', 500), 'far_right');
+  check('sıfıra yakın -> center', near('hpos', 3), 'center');
+  check('derinlik: 45 -> foreground', near('depth', 45), 'foreground');
+  check('derinlik: -140 -> horizon', near('depth', -140), 'horizon');
+
+  console.log('\n=== 16. Faz 4: lens FOV hesabı ===');
+  // fov = 2*atan(24 / (2*mm)) — 24mm is the Super35 sensor height.
+  const fovOf = mm => 2 * Math.atan(24 / (2 * mm)) * (180 / Math.PI);
+  check('50mm ~ 27°', Math.round(fovOf(50)), 27);
+  check('24mm geniş açı ~ 53°', Math.round(fovOf(24)), 53);
+  check('200mm tele ~ 7°', Math.round(fovOf(200)), 7);
+  check('kısa focal = geniş açı', fovOf(18) > fovOf(85), true);
+
+  console.log('\n=== 16b. Faz 4: kamera artık konumlandırılabilir ===');
+  await preset();
+  window.createNode('camera');
+  const camId = 'node_' + window.nodeIdCounter;
+  await wait(20);   // camera defers its vpos default to a timeout
+  // A camera is a physical object like a light, but it shipped without spatial
+  // fields — so it was pinned to the world origin and the lens view was useless.
+  check('kamerada spatial context var', !!doc.getElementById(`hpos_${camId}`), true);
+  check('kamera derinliği ayarlanabilir', !!doc.getElementById(`depth_${camId}`), true);
+  check('kamera varsayılanı eye level', doc.getElementById(`vpos_${camId}`).value, 'eye_level');
+  check('kamera position node\'una bağlanabiliyor kalıyor',
+    window.createCable(camId, 'node_5') && true, true);
+
+  console.log('\n=== 17. Faz 4: preview node kontrolleri ===');
+  await preset();
+  window.createNode('preview');
+  const pvid = 'node_' + window.nodeIdCounter;
+  // THREE is stubbed out in jsdom, so initThreePreview bails — but the node's
+  // controls are plain DOM and must still be wired.
+  check('lens viewport kabı var', !!doc.getElementById(`ttl_${pvid}`), true);
+  check('lens başlangıçta gizli',
+    doc.getElementById(`ttl_wrap_${pvid}`).style.display, 'none');
+  check('LENS butonu var', !!doc.getElementById(`ttl_btn_${pvid}`), true);
+  check('toggleLensView tanımlı', typeof window.toggleLensView, 'function');
+  check('playCameraMove tanımlı', typeof window.playCameraMove, 'function');
+  // No preview registered (THREE absent) — must not throw.
+  window.toggleLensView(pvid);
+  window.playCameraMove(pvid);
+  check('THREE yokken kontroller patlamıyor', true, true);
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);
