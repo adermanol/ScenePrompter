@@ -604,28 +604,28 @@ function lintScene(g) {
     const isNight = time.includes('Night');
     const daylitSun = g.lights.some(l =>
         val(`mode_${l.id}`) === 'sunlight' && +val(`time_${l.id}`) > 6 && +val(`time_${l.id}`) < 19);
-    if (isNight && daylitSun) w.push('Sahne gece ama güneş ışığı node\'u gündüz saatinde');
+    if (isNight && daylitSun) w.push('Scene is night but a sun light is set to a daytime hour');
 
     if (wea === 'Clear' && /Rain|Snow|Fog/.test(atmos)) {
-        w.push(`Hava "Clear" ama atmosfer "${atmos}"`);
+        w.push(`Weather is "Clear" but atmosphere is "${atmos}"`);
     }
     if (loc.startsWith('Interior:') && /Rain|Snow|Storm|Blizzard/.test(wea)) {
-        w.push(`İç mekân ama hava "${wea}" — kapalı alanda yağış`);
+        w.push(`Interior location but weather is "${wea}" — precipitation indoors`);
     }
     if (env === 'Underwater' && /Dust|Smoke|Fog|Rain/.test(atmos)) {
-        w.push(`Su altı ortam ama atmosfer "${atmos}"`);
+        w.push(`Underwater environment but atmosphere is "${atmos}"`);
     }
     if (env === 'Underwater' && g.subjects.some(s => /fire|ember|explosion/i.test(val(`vfx_spec_${s.id}`) || ''))) {
-        w.push('Su altı ortamda ateş/patlama efekti');
+        w.push('Fire/explosion effect in an underwater environment');
     }
     // A B&W look and a colour LUT cancel each other out.
     if (/B&W/.test(pal) && lut && !/Desaturated|High Contrast|Bleach/.test(lut)) {
-        w.push(`Siyah-beyaz palet ama "${lut}" renk gradingi`);
+        w.push(`Black-and-white palette but "${lut}" colour grade`);
     }
     // A macro subject inside a wide frame cannot both be true.
     if (/Extreme Wide|Wide Shot/.test(shotType) &&
         g.subjects.some(s => /Macro/.test(val(`ins_scale_${s.id}`) || ''))) {
-        w.push('Geniş plan ama makro böcek ölçeği');
+        w.push('Wide shot but macro insect scale');
     }
     if (g.subjects.length + g.chars.length + g.objects.length === 0 && !g.scene && !g.customLoc) {
         // Nothing to say — not a contradiction, so no warning.
@@ -659,9 +659,9 @@ function buildVariants(sid) {
     if (!base || base.startsWith('Connect')) return [];
     const apply = subs => polishPrompt(subs.reduce((s, [re, to]) => s.replace(re, to), base));
     return [
-        { key: 'A', note: 'temel', text: base },
-        { key: 'B', note: 'yoğunlaştırılmış', text: apply(VARIANT_SUBS.B) },
-        { key: 'C', note: 'sadeleştirilmiş', text: apply(VARIANT_SUBS.C) },
+        { key: 'A', note: 'base', text: base },
+        { key: 'B', note: 'intensified', text: apply(VARIANT_SUBS.B) },
+        { key: 'C', note: 'pared back', text: apply(VARIANT_SUBS.C) },
     ];
 }
 
@@ -722,11 +722,11 @@ function renderStackMeta(sid, prompt, def, warnings) {
     const over = def.limit > 0 && len > def.limit;
     const near = def.limit > 0 && !over && len > def.limit * 0.85;
     const color = over ? '#ff5555' : near ? '#ffcc55' : '#666';
-    const budget = def.limit > 0 ? `${len} / ${def.limit}` : `${len} karakter`;
+    const budget = def.limit > 0 ? `${len} / ${def.limit}` : `${len} chars`;
 
     meta.innerHTML =
         `<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.6rem; color:${color}; font-family:'JetBrains Mono',monospace;">
-            <span>${budget}${over ? ' — limit aşıldı' : ''}</span>
+            <span>${budget}${over ? ' — over limit' : ''}</span>
         </div>`
         + warnings.map(x =>
             `<div style="font-size:0.6rem; color:#ffcc55; background:rgba(255,204,85,0.08);

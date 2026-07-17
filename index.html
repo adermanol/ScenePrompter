@@ -27,10 +27,11 @@
         </div>
 
         <nav class="top-nav" aria-label="Nodes and tools">
-            <button class="nav-btn" data-cat="tool" onpointerdown="window.undo()" title="Geri Al (Ctrl+Z)">&#8630; Undo</button>
-            <button class="nav-btn" data-cat="tool" onpointerdown="window.redo()" title="Tekrar (Ctrl+Y)">&#8631; Redo</button>
-            <button class="nav-btn" data-cat="tool" id="sel-mode-btn" onpointerdown="window.toggleSelectMode()" title="Se&ccedil;im Modu (S)">&#9633; Se&ccedil;im</button>
-            <button class="nav-btn primary" onpointerdown="window.openQuickAdd()" title="H&#305;zl&#305; Ekle (Tab)">+ Ekle</button>
+            <button class="nav-btn" data-cat="tool" onpointerdown="window.undo()" title="Undo (Ctrl+Z)">&#8630; Undo</button>
+            <button class="nav-btn" data-cat="tool" onpointerdown="window.redo()" title="Redo (Ctrl+Y)">&#8631; Redo</button>
+            <button class="nav-btn" data-cat="tool" id="sel-mode-btn" onpointerdown="window.toggleSelectMode()" title="Select mode (S)">&#9633; Select</button>
+            <button class="nav-btn primary" onpointerdown="window.openQuickAdd()" title="Quick add (Tab)">+ Add</button>
+            <button class="nav-btn" data-cat="tool" onpointerdown="window.randomizeAll()" title="Randomize the whole scene (R)">&#127922; Random</button>
             <span class="nav-sep"></span>
 
             <button class="nav-btn" data-cat="source" onpointerdown="createNode('scene')">Scene</button>
@@ -72,6 +73,7 @@
                        border-radius:6px; font-weight:700; font-size:0.68rem; cursor:pointer; min-height:34px;">
                 <option value="">-- Presets --</option>
             </select>
+            <button class="nav-btn" data-cat="tool" data-act="presets" onpointerdown="openPresetManager()" title="Save / manage presets">&#128190;</button>
             <button class="nav-btn" data-cat="tool" data-act="history" onpointerdown="openHistory()" title="History">History</button>
             <button class="nav-btn" data-cat="tool" data-act="save" onpointerdown="saveWorkspace()" title="Save">Save</button>
             <button class="nav-btn" data-cat="tool" data-act="load" onpointerdown="loadWorkspace()" title="Load">Load</button>
@@ -95,10 +97,10 @@
          was open on every page load. -->
     <div id="quick-add-modal" style="display:none; flex-direction:column; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:90vw; max-width:500px; max-height:70vh; background:#1a1a1a; border:1px solid #444; border-radius:8px; z-index:3500; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
         <div style="padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
-            <h3 style="margin:0; color:#eee; font-size:1rem;">+ Hızlı Ekle</h3>
+            <h3 style="margin:0; color:#eee; font-size:1rem;">+ Quick Add</h3>
             <button onclick="document.getElementById('quick-add-modal').style.display='none'" style="background:none; border:none; color:#fff; cursor:pointer; font-size:1.2rem;">&times;</button>
         </div>
-        <input type="text" id="quick-add-search" placeholder="Node tipi ara..." style="background:#111; color:#eee; border:1px solid #333; padding:10px; margin:10px; font-size:0.9rem; border-radius:4px;" oninput="window.filterQuickAdd(this.value)">
+        <input type="text" id="quick-add-search" placeholder="Search node type..." style="background:#111; color:#eee; border:1px solid #333; padding:10px; margin:10px; font-size:0.9rem; border-radius:4px;" oninput="window.filterQuickAdd(this.value)">
         <div id="quick-add-list" style="flex:1; overflow-y:auto; padding:10px; display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:8px;"></div>
     </div>
 

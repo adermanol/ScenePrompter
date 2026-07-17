@@ -35,6 +35,10 @@ window.eval(src + '\n;window.SUBJECTS = SUBJECTS;'
                 + '\n;window.nearestBucket = nearestBucket;'
                 + '\n;window.serializeWorkspace = serializeWorkspace;');
 
+// randomizeAll needs confirm=true; saveAsPreset needs a name from prompt.
+window.confirm = () => true;
+window.prompt = () => 'Test Preset';
+
 const doc = window.document;
 const svg = doc.getElementById('svg-layer');
 
@@ -112,6 +116,29 @@ async function main() {
   window.redo();
   check('redo: tekrar silindi, 0 kablo', counts().model, 0);
   check('redo: DOM temiz', dom3(), { g: 0, h: 0, v: 0 });
+
+  console.log('\n=== 6c. duplicateNode gerçekten çalışan bir kopya üretiyor ===');
+  await preset();
+  window.createNode('character');
+  const dSrc = 'node_' + window.nodeIdCounter;
+  doc.getElementById(`chr_name_${dSrc}`).value = 'ORIGINAL';
+  doc.getElementById(`chr_emo_${dSrc}`).value = 'Anger';
+  window.duplicateNode(dSrc);
+  await wait(20);   // copyNodeValues runs on a timeout
+  const dDup = 'node_' + window.nodeIdCounter;
+  check('kopya ayrı bir id aldı', dSrc !== dDup, true);
+  check('kopyanın alanları KENDİ id\'siyle var  <-- eski hata: id hiç yeniden yazılmıyordu',
+    !!doc.getElementById(`chr_name_${dDup}`), true);
+  check('değerler kopyalandı', doc.getElementById(`chr_name_${dDup}`).value, 'ORIGINAL');
+  check('ikinci alan da kopyalandı', doc.getElementById(`chr_emo_${dDup}`).value, 'Anger');
+  // The header must drag the COPY, not the source — this is why the duplicate
+  // "never moved": its header still called nodeDrag on the original.
+  const dupHeader = window.nodes[dDup].el.querySelector('.node-header').getAttribute('onpointerdown');
+  check('kopyanın başlığı kendini sürüklüyor', dupHeader.includes(dDup), true);
+  check('kopyanın başlığı kaynağı sürüklemiyor', dupHeader.includes(`'${dSrc}'`), false);
+  check('çift DOM id yok', doc.querySelectorAll(`#chr_name_${dDup}`).length, 1);
+  check('kaynak bozulmadı', doc.getElementById(`chr_name_${dSrc}`).value, 'ORIGINAL');
+  check('kopya kategori rengini taşıyor', window.nodes[dDup].el.getAttribute('data-cat'), 'subject');
 
   console.log('\n=== 7. Undo: node ekleme geri alınıyor mu ===');
   await preset();
@@ -241,6 +268,45 @@ async function main() {
   window.loadWorkspaceData(JSON.stringify(vNext));
   check('gelecek sürümlü kayıt reddedildi, kanvas bozulmadı',
     Object.keys(window.nodes).length, beforeFuture);
+
+  console.log('\n=== 13c. Randomize tam bir sahne kuruyor ===');
+  await preset();
+  window.randomizeAll();
+  await wait(120);   // randomizeAll wires on a setTimeout(60)
+  const rNodes = Object.keys(window.nodes).length;
+  check('randomize 9 node kurdu', rNodes, 9);
+  check('randomize kabloları bağladı (7 içerik -> stack + stack -> preview)', counts().model, 8);
+  const rStack = Object.keys(window.nodes).find(id => window.nodes[id].type === 'stack');
+  const rOut = doc.getElementById(`val_${rStack}`).value;
+  check('randomize gerçek bir prompt üretti', rOut.length > 40 && !rOut.startsWith('Connect'), true);
+  // Fields must be assigned, not left blank — a scene loc dropdown got a value.
+  const rScene = Object.keys(window.nodes).find(id => window.nodes[id].type === 'scene');
+  check('randomize alanları doldurdu (boş bırakmadı)', doc.getElementById(`scn_loc_${rScene}`).value !== '', true);
+  check('randomize undo geçmişini kirletmedi', window.undoStack.length, 0);
+
+  console.log('\n=== 13d. Save-as-preset roundtrip ===');
+  window.localStorage.removeItem('user_presets');
+  await preset();
+  window.createNode('character');
+  const upSrc = 'node_' + window.nodeIdCounter;
+  doc.getElementById(`chr_name_${upSrc}`).value = 'PresetGuy';
+  window.saveAsPreset();
+  const stored = JSON.parse(window.localStorage.getItem('user_presets') || '{}');
+  check('preset localStorage\'a kaydedildi', !!stored['Test Preset'], true);
+  check('preset node verisi taşıyor', Object.keys(stored['Test Preset'].nodes || {}).length > 0, true);
+  // Load it back into a clean canvas via the user-preset path.
+  Object.keys(window.nodes).forEach(id => window.kill(id));
+  window.clearAllCables();
+  window.loadPresetConfirmed('user:Test Preset');
+  await wait(20);
+  // The preset holds every node that was on the canvas (cyberpunk + PresetGuy),
+  // so check that PresetGuy survived the roundtrip, not that it's the only one.
+  const names = Object.values(window.nodes)
+    .filter(n => n.type === 'character')
+    .map(n => doc.getElementById(`chr_name_${n.id}`).value);
+  check('user preset geri yüklendi (PresetGuy korundu)', names.includes('PresetGuy'), true);
+  window.deleteUserPreset('Test Preset');
+  check('preset silindi', !!JSON.parse(window.localStorage.getItem('user_presets') || '{}')['Test Preset'], false);
 
   console.log('\n=== 14. Preset yükleme undo geçmişini kirletmiyor ===');
   window.loadPreset('noir');

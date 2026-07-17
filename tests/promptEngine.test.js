@@ -296,7 +296,7 @@ eq('Clear hava + Rain atmosferi yakalandı',
 
 set('scn_loc_sc', 'Interior: Living Room'); set('scn_wea_sc', 'Heavy Rain'); set('atm_fx_at', 'Clear');
 g = collectInputs('s', lintNodes, lintCables);
-eq('iç mekânda yağış yakalandı', lintScene(g).some(x => x.includes('İç mekân')), true);
+eq('interior precipitation caught', lintScene(g).some(x => x.includes('Interior location')), true);
 
 // Night scene + a sun light set to midday.
 const lit = { id: 'li', type: 'light', el: { style: { left: '0px' } } };
@@ -304,11 +304,11 @@ set('mode_li', 'sunlight'); set('time_li', '13');
 set('scn_loc_sc', 'Exterior: City Street'); set('scn_time_sc', 'Night Dark (19:30-04:00)');
 set('scn_wea_sc', 'Clear');
 g = collectInputs('s', { ...lintNodes, li: lit }, [...lintCables, { from: 'li', to: 's' }]);
-eq('gece sahne + gündüz güneşi yakalandı', lintScene(g).some(x => x.includes('gündüz')), true);
+eq('night scene + daytime sun caught', lintScene(g).some(x => x.includes('daytime hour')), true);
 
 set('time_li', '22');
 g = collectInputs('s', { ...lintNodes, li: lit }, [...lintCables, { from: 'li', to: 's' }]);
-eq('gece güneşi (22:00) uyarı vermiyor', lintScene(g).some(x => x.includes('gündüz')), false);
+eq('night sun (22:00) gives no warning', lintScene(g).some(x => x.includes('daytime hour')), false);
 
 // B&W palette fighting a colour LUT.
 const bw = { id: 'st2', type: 'style', el: { style: { left: '0px' } } };
@@ -317,11 +317,11 @@ set('sty_cin_st2', 'Film Noir'); set('sty_dir_st2', 'Roger Deakins');
 set('sty_pal_st2', 'High Contrast B&W');
 set('col_lut_cg', 'Teal & Orange'); set('col_stk_cg', 'Ilford HP5 (B&W)');
 g = collectInputs('s', { s: nodes.s, st2: bw, cg }, [{ from: 'st2', to: 's' }, { from: 'cg', to: 's' }]);
-eq('B&W palet + renkli LUT yakalandı', lintScene(g).some(x => x.includes('Siyah-beyaz')), true);
+eq('B&W palette + colour LUT caught', lintScene(g).some(x => x.includes('Black-and-white')), true);
 
 set('col_lut_cg', 'High Contrast');
 g = collectInputs('s', { s: nodes.s, st2: bw, cg }, [{ from: 'st2', to: 's' }, { from: 'cg', to: 's' }]);
-eq('B&W + High Contrast uyumlu, uyarı yok', lintScene(g).some(x => x.includes('Siyah-beyaz')), false);
+eq('B&W + High Contrast compatible, no warning', lintScene(g).some(x => x.includes('Black-and-white')), false);
 
 console.log('\n=== Faz 3: Yapılandırılmış dışa aktarım ===');
 set('scn_loc_sc', 'Exterior: Dense Forest'); set('scn_time_sc', 'Night Dark (19:30-04:00)');

@@ -128,7 +128,7 @@ window.updateMinimap = function() {
 // Existing fields keep their old default so saved workspaces read the same;
 // fields added later default to unassigned, making new detail opt-in.
 // ---------------------------------------------------------------------------
-const UNSET_LABEL = '— belirtilmemiş';
+const UNSET_LABEL = '— unassigned';
 
 // ---------------------------------------------------------------------------
 // CATEGORIES
@@ -477,22 +477,27 @@ window.createNode = function(type) {
     }
     else if (type === 'preview') {
         hasIn = true; hasOut = true; title = "GLOBAL PREVIEW (3D)";
-        el.style.width = 'auto';
+        // A definite starting size so the node's own resize handle has something
+        // to grow from. The 3D view fills the content, so resizing the NODE
+        // resizes the render — the inner viewport no longer has its own handle
+        // or fixed dimensions fighting the node's.
+        el.style.width = '360px';
+        el.style.height = '460px';
         content = `
-            <div class="viewport-3d" id="v3d_${id}" style="resize: both; overflow: hidden; min-width: 250px; min-height: 200px; width: 350px; height: 320px;">
+            <div class="viewport-3d preview-fill" id="v3d_${id}">
                 <div id="three_${id}" style="width:100%; height:100%; position:relative;"></div>
             </div>
             <!-- Through-the-lens: what the connected camera node actually frames -->
-            <div id="ttl_wrap_${id}" style="display:none; margin-top:6px;">
+            <div id="ttl_wrap_${id}" style="display:none; margin-top:6px; flex-shrink:0;">
                 <div style="font-size:0.6rem; color:#666; margin-bottom:2px;">THROUGH THE LENS</div>
-                <div class="viewport-3d" id="ttl_${id}" style="width:100%; height:180px; min-height:120px; resize:vertical; overflow:hidden;"></div>
+                <div class="viewport-3d" id="ttl_${id}" style="width:100%; height:160px; min-height:110px; resize:vertical; overflow:hidden;"></div>
             </div>
-            <div style="display:flex; gap:5px; margin-top:5px;">
-                <button class="btn-tool" id="ttl_btn_${id}" onpointerdown="toggleLensView('${id}')" title="Kameranın gördüğü kare">🎥 LENS</button>
-                <button class="btn-tool" onpointerdown="playCameraMove('${id}')" title="Kamera hareketini oynat">▶ HAREKET</button>
+            <div style="display:flex; gap:5px; margin-top:5px; flex-shrink:0;">
+                <button class="btn-tool" id="ttl_btn_${id}" onpointerdown="toggleLensView('${id}')" title="Frame the connected camera sees">🎥 LENS</button>
+                <button class="btn-tool" onpointerdown="playCameraMove('${id}')" title="Play the camera move">▶ MOVE</button>
             </div>
-            <div id="v3d_hint_${id}" style="text-align:center; font-size:0.6rem; color:#666; margin-top:4px;">
-                Objeyi sürükleyerek konumlandır
+            <div id="v3d_hint_${id}" style="text-align:center; font-size:0.6rem; color:#666; margin-top:4px; flex-shrink:0;">
+                Drag an object to position it
             </div>
         `;
         setTimeout(() => initThreePreview(id), 50);
@@ -509,8 +514,8 @@ window.createNode = function(type) {
             <div class="stack-tools">
                 <button class="btn-tool" onpointerdown="resetStack('${id}')">RESET</button>
                 <button class="btn-tool" onpointerdown="copyStack('${id}')">COPY</button>
-                <button class="btn-tool" onpointerdown="copyStructured('${id}')" title="Yapılandırılmış JSON kopyala">JSON</button>
-                <button class="btn-tool" onpointerdown="showVariants('${id}')" title="A/B/C varyantları">A/B/C</button>
+                <button class="btn-tool" onpointerdown="copyStructured('${id}')" title="Copy structured JSON">JSON</button>
+                <button class="btn-tool" onpointerdown="showVariants('${id}')" title="A/B/C variants">A/B/C</button>
             </div>
             <button class="btn-gen" style="background:#55ff55" onpointerdown="sendToAPI('${id}')">Send to Generator</button>
         `;
@@ -931,50 +936,73 @@ function restoreState(state) {
 }
 
 window.undo = function() {
-    if(window.undoStack.length === 0) return window.showToast('Undo geçmişi boş');
+    if(window.undoStack.length === 0) return window.showToast('Nothing to undo');
     // Serialize directly (not captureState) so the redo stack survives.
     window.redoStack.unshift(serializeWorkspace());
     restoreState(window.undoStack.shift());
-    window.showToast('Geri alındı');
+    window.showToast('Undone');
 };
 
 window.redo = function() {
-    if(window.redoStack.length === 0) return window.showToast('Redo geçmişi boş');
+    if(window.redoStack.length === 0) return window.showToast('Nothing to redo');
     window.undoStack.unshift(serializeWorkspace());
     restoreState(window.redoStack.shift());
-    window.showToast('Tekrar edildi');
+    window.showToast('Redone');
 };
+
+// Copy every field value from one node to another of the same type.
+function copyNodeValues(srcId, dstId) {
+    const src = window.nodes[srcId];
+    if(!src) return;
+    // A light rebuilds its fixture controls when the mode changes, which would
+    // wipe whatever we just wrote — switch mode first, then fill.
+    const srcMode = document.getElementById(`mode_${srcId}`);
+    const dstMode = document.getElementById(`mode_${dstId}`);
+    if(srcMode && dstMode) { dstMode.value = srcMode.value; window.toggleLight(dstId); }
+
+    src.el.querySelectorAll('input, select, textarea').forEach(el => {
+        if(!el.id) return;
+        const dst = document.getElementById(el.id.replace(srcId, dstId));
+        if(!dst) return;
+        if(el.type === 'checkbox') dst.checked = el.checked;
+        else dst.value = el.value;
+    });
+}
 
 window.duplicateNode = function(id) {
     const src = window.nodes[id];
     if(!src) return;
     captureState();   // snapshot before the copy exists
+
     const wasRestoring = isRestoring;
-    isRestoring = true;   // the copy is one step, not two
-    window.nodeIdCounter++;
+    isRestoring = true;   // the copy is one undo step, not two
+
+    // Build the copy through the real construction path rather than cloning
+    // innerHTML. The old code did `.replace(/_${id}/g, ...)` — a regex literal,
+    // not a template string, so it matched nothing and no id was ever rewritten.
+    // The clone kept the source's ids, which meant its header still called
+    // nodeDrag() on the ORIGINAL: dragging the copy moved the source and the
+    // copy itself sat there inert, invisible to getElementById and the engine.
+    window.createNode(src.type);
     const newId = 'node_' + window.nodeIdCounter;
-    const el = document.createElement('div');
-    el.className = src.el.className;
-    el.id = newId;
-    el.style.left = (parseFloat(src.el.style.left) + 30) + 'px';
-    el.style.top = (parseFloat(src.el.style.top) + 30) + 'px';
-    el.innerHTML = src.el.innerHTML.replace(/id="/g, 'id="').replace(/_${id}/g, `_${newId}`);
-    world.appendChild(el);
-    window.nodes[newId] = { id: newId, type: src.type, el, zoom: src.zoom };
-    new ResizeObserver(() => updateCables()).observe(el);
-
-    src.el.querySelectorAll('input, select, textarea').forEach(oldEl => {
-        if(oldEl.id) {
-            const newElId = oldEl.id.replace(src.id, newId);
-            const newEl = el.querySelector(`#${newElId}`);
-            if(newEl) newEl.value = oldEl.type === 'checkbox' ? oldEl.checked : oldEl.value;
-        }
-    });
-
+    const copy = window.nodes[newId];
     isRestoring = wasRestoring;
-    if(src.type === 'light') window.toggleLight(newId);
-    window.triggerUpdate();
-    window.showToast('Node çoğaltıldı');
+    if(!copy) return;
+
+    copy.el.style.left = (parseFloat(src.el.style.left) + 30) + 'px';
+    copy.el.style.top = (parseFloat(src.el.style.top) + 30) + 'px';
+    if(src.el.style.width) copy.el.style.width = src.el.style.width;
+    if(src.el.style.height) copy.el.style.height = src.el.style.height;
+    copy.zoom = src.zoom;
+
+    // Nodes with deferred init (light's panel, camera's flavour text) finish on a
+    // timeout, so values land after that rather than being overwritten by it.
+    setTimeout(() => {
+        copyNodeValues(id, newId);
+        window.triggerUpdate();
+    }, 0);
+
+    window.showToast('Node duplicated');
 };
 
 window.kill = function(id) {
@@ -1072,7 +1100,7 @@ window.loadWorkspaceData = function(str) {
 
 window.loadWorkspace = function() {
     if(Object.keys(window.nodes).length > 0 &&
-       !confirm('Dosya yüklemek mevcut kanvası silecek. Devam edilsin mi?')) return;
+       !confirm('Loading a file will clear the current canvas. Continue?')) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -1154,18 +1182,26 @@ window.loadPresetConfirmed = function(name) {
     if(!name) return;
     const sel = document.getElementById('preset_sel');
     if(Object.keys(window.nodes).length > 0 &&
-       !confirm('Preset yüklemek mevcut kanvası silecek. Devam edilsin mi?')) {
+       !confirm('Loading a preset will clear the current canvas. Continue?')) {
         if(sel) sel.value = '';
         return;
     }
-    window.loadPreset(name);
+    if(name.startsWith('user:')) {
+        // User presets are saved workspaces — load them the same way Load does.
+        const data = getUserPresets()[name.slice(5)];
+        if(data) window.loadWorkspaceData(JSON.stringify(data));
+        else window.showToast('Preset not found');
+    } else {
+        window.loadPreset(name);
+    }
+    if(sel) sel.value = '';
 };
 
 let presetTimer = null;
 window.loadPreset = function(name) {
     if(!name) return;
     const def = PRESETS[name];
-    if(!def) { window.showToast(`Bilinmeyen preset: ${name}`); return; }
+    if(!def) { window.showToast(`Unknown preset: ${name}`); return; }
 
     // A previous preset may still have its cable-wiring timeout pending; drop it
     // or its cables land on top of the canvas we are about to build.
@@ -1204,7 +1240,7 @@ window.loadPreset = function(name) {
         updateCables(); window.triggerUpdate(); window.updateMinimap();
         isRestoring = false;   // preset fully built; start recording undo again
         window.undoStack = []; window.redoStack = [];
-        window.showToast(`${def.label} preset yüklendi`);
+        window.showToast(`${def.label} preset loaded`);
     }, 50);
 
     document.getElementById('preset_sel').value = "";
@@ -1246,7 +1282,7 @@ window.copyStack = function(id) {
 // A/B/C variants of the current prompt, side by side, each copyable.
 window.showVariants = function(id) {
     const variants = buildVariants(id);
-    if(!variants.length) return window.showToast('Önce bir prompt üret');
+    if(!variants.length) return window.showToast('Generate a prompt first');
 
     let modal = document.getElementById('variant-modal');
     if(!modal) {
@@ -1262,7 +1298,7 @@ window.showVariants = function(id) {
     modal.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;
              border-bottom:1px solid #333; padding-bottom:10px;">
-            <h3 style="margin:0; color:#eee; font-size:1rem;">Prompt Varyantları</h3>
+            <h3 style="margin:0; color:#eee; font-size:1rem;">Prompt Variants</h3>
             <button onclick="document.getElementById('variant-modal').style.display='none'"
                 style="background:none; border:none; color:#fff; cursor:pointer; font-size:1.4rem;
                 min-width:44px; min-height:44px;">&times;</button>
@@ -1276,7 +1312,7 @@ window.showVariants = function(id) {
                     resize:vertical;">${v.text}</textarea>
                 <button class="btn-tool" style="margin-top:4px; width:100%;"
                     onpointerdown="navigator.clipboard.writeText(this.previousElementSibling.value)
-                        .then(()=>window.showToast('${v.key} kopyalandı'))">KOPYALA ${v.key}</button>
+                        .then(()=>window.showToast('${v.key} copied'))">COPY ${v.key}</button>
             </div>`).join('')}
     `;
 };
@@ -1285,8 +1321,8 @@ window.showVariants = function(id) {
 window.copyStructured = function(id) {
     const data = buildStructured(id, window.nodes, window.cables);
     navigator.clipboard.writeText(JSON.stringify(data, null, 2))
-        .then(() => window.showToast('Yapılandırılmış JSON kopyalandı'))
-        .catch(() => window.showToast('Kopyalama başarısız'));
+        .then(() => window.showToast('Structured JSON copied'))
+        .catch(() => window.showToast('Copy failed'));
 };
 
 window.openHistory = openHistory;
@@ -1301,13 +1337,13 @@ window.toggleSelectMode = function() {
     if(window.selectMode) {
         btn.style.borderColor = '#55ff99';
         btn.style.background = 'rgba(85, 255, 153, 0.1)';
-        window.showToast('Seçim Modu: ON (Tıkla = seç, Ctrl+A = tümü, Del = sil)');
+        window.showToast('Select mode: ON (Click = select, Ctrl+A = all, Del = delete)');
     } else {
         btn.style.borderColor = '#666';
         btn.style.background = 'transparent';
         window.selectedNodes.clear();
         document.querySelectorAll('.node').forEach(n => n.style.borderColor = '');
-        window.showToast('Seçim Modu: OFF');
+        window.showToast('Select mode: OFF');
     }
 };
 
@@ -1328,7 +1364,7 @@ window.selectAll = function() {
         window.selectedNodes.add(id);
         document.getElementById(id).style.borderColor = '#55ff99';
     }
-    window.showToast('Tüm node\'lar seçildi');
+    window.showToast('All nodes selected');
 };
 
 window.deleteSelected = function() {
@@ -1336,14 +1372,14 @@ window.deleteSelected = function() {
     const ids = Array.from(window.selectedNodes);
     window.selectedNodes.clear();
     ids.forEach(id => window.kill(id));
-    window.showToast(`${ids.length} node silindi`);
+    window.showToast(`${ids.length} nodes deleted`);
 };
 
 window.duplicateSelected = function() {
     if(window.selectedNodes.size === 0) return;
     const ids = Array.from(window.selectedNodes);
     ids.forEach(id => window.duplicateNode(id));
-    window.showToast(`${ids.length} node çoğaltıldı`);
+    window.showToast(`${ids.length} nodes duplicated`);
 };
 
 // QUICK ADD PALETTE
@@ -1392,7 +1428,7 @@ window.filterQuickAdd = function(query) {
             btn.onpointerdown = () => {
                 createNode(type);
                 document.getElementById('quick-add-modal').style.display = 'none';
-                window.showToast(`${type} eklendi`);
+                window.showToast(`${type} added`);
             };
             list.appendChild(btn);
         });
@@ -1422,11 +1458,11 @@ function showContextMenu(e, id, type) {
 
     const items = [];
     if(type === 'node') {
-        items.push({ label: '🔄 Çoğalt', fn: () => window.duplicateNode(id) });
-        items.push({ label: '✏️ Seç', fn: () => { document.querySelectorAll('.node').forEach(n => n.classList.remove('selected')); document.getElementById(id).classList.add('selected'); } });
-        items.push({ label: '🗑️ Sil', fn: () => { window.kill(id); window.showToast('Node deleted'); } });
+        items.push({ label: '🔄 Duplicate', fn: () => window.duplicateNode(id) });
+        items.push({ label: '✏️ Select', fn: () => { document.querySelectorAll('.node').forEach(n => n.classList.remove('selected')); document.getElementById(id).classList.add('selected'); } });
+        items.push({ label: '🗑️ Delete', fn: () => { window.kill(id); window.showToast('Node deleted'); } });
     } else if(type === 'cable') {
-        items.push({ label: '🗑️ Bağlantıyı sil', fn: () => removeCable(id) });
+        items.push({ label: '🗑️ Delete connection', fn: () => removeCable(id) });
     }
 
     items.forEach(item => {
@@ -1523,24 +1559,36 @@ window.initThreePreview = function(id) {
     };
     window.threePreviews[id] = preview;
 
-    const resizeObserver = new ResizeObserver(() => {
-        if(container.clientWidth === 0) return;
-        camera.aspect = container.clientWidth / container.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(container.clientWidth, container.clientHeight);
-        if(ttlRenderer && ttlBox && ttlBox.clientWidth) {
-            ttlCamera.aspect = ttlBox.clientWidth / ttlBox.clientHeight;
-            ttlCamera.updateProjectionMatrix();
-            ttlRenderer.setSize(ttlBox.clientWidth, ttlBox.clientHeight);
-        }
-    });
-    resizeObserver.observe(container.parentElement);
-    if(ttlBox) resizeObserver.observe(ttlBox);
-
     attachSceneDrag(preview, container);
+
+    // Keep a renderer matched to its box. Done per-frame rather than through a
+    // ResizeObserver: it fires no matter what changed the size — the node's own
+    // resize handle, the window, or code — and does not depend on RO delivery
+    // timing (which an earlier ResizeObserver approach silently missed when the
+    // node grew but the observer never fired).
+    let lastW = 0, lastH = 0, lastTW = 0, lastTH = 0;
+    const syncSizes = function() {
+        const cw = container.clientWidth, ch = container.clientHeight;
+        if(cw > 0 && (cw !== lastW || ch !== lastH)) {
+            lastW = cw; lastH = ch;
+            camera.aspect = cw / ch;
+            camera.updateProjectionMatrix();
+            renderer.setSize(cw, ch);   // updates the canvas CSS box to fill the container
+        }
+        if(preview.ttlOn && ttlRenderer && ttlBox) {
+            const tw = ttlBox.clientWidth, th = ttlBox.clientHeight;
+            if(tw > 0 && (tw !== lastTW || th !== lastTH)) {
+                lastTW = tw; lastTH = th;
+                ttlCamera.aspect = tw / th;
+                ttlCamera.updateProjectionMatrix();
+                ttlRenderer.setSize(tw, th);
+            }
+        }
+    };
 
     const animate = function() {
         requestAnimationFrame(animate);
+        syncSizes();
         orbit.update();
         renderer.render(scene, camera);
 
@@ -1612,7 +1660,7 @@ window.toggleLensView = function(id) {
         btn.style.borderColor = p.ttlOn ? 'var(--accent)' : '#333';
         btn.style.color = p.ttlOn ? 'var(--accent)' : '#aaa';
     }
-    if(p.ttlOn && !p.lens) window.showToast('Bir Camera node bagla');
+    if(p.ttlOn && !p.lens) window.showToast('Connect a Camera node');
     if(p.ttlOn && p.ttlRenderer && p.ttlBox && p.ttlBox.clientWidth) {
         p.ttlCamera.aspect = p.ttlBox.clientWidth / p.ttlBox.clientHeight;
         p.ttlCamera.updateProjectionMatrix();
@@ -1623,12 +1671,12 @@ window.toggleLensView = function(id) {
 window.playCameraMove = function(id) {
     const p = window.threePreviews[id];
     if(!p) return;
-    if(!p.lens) return window.showToast('Bir Camera node bagla');
+    if(!p.lens) return window.showToast('Connect a Camera node');
     const kind = p.lens.action;
-    if(!kind || kind === 'none') return window.showToast('Kamerada ADVANCED TRACKING ayarla');
+    if(!kind || kind === 'none') return window.showToast('Set ADVANCED TRACKING on the camera');
     if(!p.ttlOn) window.toggleLensView(id);
     p.play = { kind, t0: performance.now(), duration: 3000 };
-    window.showToast(kind.replace('_', ' ') + ' oynatiliyor');
+    window.showToast('Playing ' + kind.replace('_', ' '));
 };
 
 // Drag a subject on the ground plane; snap to the nearest spatial bucket and
@@ -2085,6 +2133,9 @@ document.addEventListener('keydown', (e) => {
     if(e.key === 's' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
         e.preventDefault(); window.toggleSelectMode();
     }
+    if(e.key === 'r' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault(); window.randomizeAll();
+    }
     if(e.code === 'Tab' && document.activeElement.id !== 'quick-add-search') {
         e.preventDefault(); window.openQuickAdd();
     }
@@ -2111,15 +2162,15 @@ document.addEventListener('keydown', (e) => {
         }
     }
     if(e.key === 'Escape') {
-        document.getElementById('quick-add-modal').style.display = 'none';
-        document.getElementById('history-modal').style.display = 'none';
+        document.querySelectorAll('#quick-add-modal, #history-modal, #variant-modal, #preset-modal')
+            .forEach(m => { if(m) m.style.display = 'none'; });
         clearCableSelection();
     }
     if(e.key === 'Delete' || e.key === 'Backspace') {
         if(document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
             if(window.selectedCable) {
                 removeCable(window.selectedCable);
-                window.showToast('Bağlantı silindi');
+                window.showToast('Connection deleted');
             } else if(window.selectMode && window.selectedNodes.size > 0) {
                 window.deleteSelected();
             } else {
@@ -2147,12 +2198,195 @@ function buildSubjectNav() {
     ).join('');
 }
 
-// Preset dropdown is built from PRESETS, so a new preset needs no HTML edit.
+// ---------------------------------------------------------------------------
+// USER PRESETS
+//
+// A user preset is just a saved workspace stored under a name. It uses the same
+// serialize/restore path as Save/Load, so anything that loads also presets —
+// no second format to keep in sync. Built-in presets (PRESETS) stay code;
+// user presets live in localStorage.
+// ---------------------------------------------------------------------------
+const USER_PRESETS_KEY = 'user_presets';
+
+function getUserPresets() {
+    try { return JSON.parse(localStorage.getItem(USER_PRESETS_KEY)) || {}; }
+    catch(e) { return {}; }
+}
+function setUserPresets(obj) {
+    localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(obj));
+}
+
+// ---------------------------------------------------------------------------
+// RANDOMIZE — build a whole coherent scene from nothing, dice-roll every field.
+// ---------------------------------------------------------------------------
+const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+
+// Pick a random assigned option (never the "unassigned" empty one).
+function randomizeSelect(sel) {
+    const opts = Array.from(sel.options).filter(o => o.value !== '' && !o.disabled);
+    if(opts.length) sel.value = rand(opts).value;
+}
+
+function randomizeNodeInputs(nodeId) {
+    const node = window.nodes[nodeId];
+    if(!node) return;
+    node.el.querySelectorAll('select').forEach(sel => {
+        if(sel.id.startsWith('cam_adv_tgt_')) return;       // dynamic; wired separately
+        if(sel.id.startsWith('cam_adv_act_')) return;       // leave the camera static
+        if(sel.id.startsWith('mode_')) return;              // light mode handled below
+        randomizeSelect(sel);
+    });
+    node.el.querySelectorAll('input[type="range"]').forEach(r => {
+        const min = +r.min || 0, max = +r.max || 100;
+        r.value = Math.round(min + Math.random() * (max - min));
+    });
+    // Focal length: a sane cinematic pick, not a random number up to 2000mm.
+    const mmSl = node.el.querySelector('[id^="mm_sl_"]');
+    const mmIn = node.el.querySelector('[id^="mm_in_"]');
+    if(mmSl && mmIn) { const mm = rand([18, 24, 35, 50, 85, 135]); mmSl.value = mm; mmIn.value = mm; }
+}
+
+window.randomizeAll = function() {
+    if(Object.keys(window.nodes).length > 0 &&
+       !confirm('Randomize will replace the current canvas. Continue?')) return;
+
+    if(presetTimer) { clearTimeout(presetTimer); presetTimer = null; }
+    isRestoring = true;
+    Object.keys(window.nodes).forEach(id => window.kill(id));
+    clearAllCables();
+    window.nodeIdCounter = 0;
+    window.undoStack = []; window.redoStack = [];
+    worldState = { x: 0, y: 0, zoom: 1 };
+    window.updateWorld();
+
+    // One random subject alongside the fixed set — sometimes a person, sometimes
+    // a beast or a vehicle, so no two rolls look the same.
+    const subject = rand(['character', ...SUBJECT_TYPES]);
+    const layout = [
+        ['scene', 40, 40], [subject, 40, 320], ['style', 40, 620],
+        ['light', 360, 40], ['camera', 360, 320],
+        ['colorg', 680, 40], ['shot', 680, 340],
+        ['stack', 1000, 120], ['preview', 1320, 60],
+    ];
+    const ids = {};
+    layout.forEach(([type, x, y]) => {
+        window.createNode(type);
+        const id = 'node_' + window.nodeIdCounter;
+        window.nodes[id].el.style.left = x + 'px';
+        window.nodes[id].el.style.top = y + 'px';
+        (ids[type] = ids[type] || []).push(id);
+    });
+
+    // Deferred-init nodes (light panel, camera flavour) finish on a timeout, so
+    // fill values and wire after that — same reason loadPreset waits.
+    presetTimer = setTimeout(() => {
+        presetTimer = null;
+
+        // Light: coin-flip the mode, rebuild its panel, then randomize what's there.
+        (ids.light || []).forEach(id => {
+            const mode = document.getElementById(`mode_${id}`);
+            if(mode) { mode.value = rand(['industrial', 'sunlight']); window.toggleLight(id); }
+        });
+
+        layout.forEach(([type]) => (ids[type] || []).forEach(randomizeNodeInputs));
+
+        const stackId = ids.stack[0];
+        const previewId = ids.preview[0];
+        ['scene', subject, 'style', 'light', 'camera', 'colorg', 'shot']
+            .forEach(t => (ids[t] || []).forEach(id => window.createCable(id, stackId)));
+        window.createCable(stackId, previewId);
+
+        updateCables();
+        window.triggerUpdate();
+        isRestoring = false;
+        window.undoStack = []; window.redoStack = [];
+        window.showToast('🎲 Randomized!');
+    }, 60);
+};
+
+window.saveAsPreset = function() {
+    if(Object.keys(window.nodes).length === 0) return window.showToast('Nothing to save yet');
+    const name = (prompt('Preset name:') || '').trim();
+    if(!name) return;
+    const presets = getUserPresets();
+    if(presets[name] && !confirm(`"${name}" already exists. Overwrite?`)) return;
+    presets[name] = serializeWorkspace();
+    setUserPresets(presets);
+    buildPresetMenu();
+    window.showToast(`Preset "${name}" saved`);
+};
+
+window.deleteUserPreset = function(name) {
+    const presets = getUserPresets();
+    if(!presets[name]) return;
+    if(!confirm(`Delete preset "${name}"?`)) return;
+    delete presets[name];
+    setUserPresets(presets);
+    buildPresetMenu();
+    renderPresetManager();
+    window.showToast(`Preset "${name}" deleted`);
+};
+
+// Built-in presets and user presets in one dropdown. Built-in values are the
+// plain key; user values are prefixed so loadPresetConfirmed can tell them apart.
 function buildPresetMenu() {
     const sel = document.getElementById('preset_sel');
     if(!sel) return;
+    const builtins = Object.keys(PRESETS)
+        .map(k => `<option value="${k}">${PRESETS[k].label}</option>`).join('');
+    const users = Object.keys(getUserPresets());
+    const userOpts = users.length
+        ? `<optgroup label="My Presets">`
+            + users.map(n => `<option value="user:${n}">${n}</option>`).join('')
+            + `</optgroup>`
+        : '';
     sel.innerHTML = '<option value="">-- Presets --</option>'
-        + Object.keys(PRESETS).map(k => `<option value="${k}">${PRESETS[k].label}</option>`).join('');
+        + `<optgroup label="Built-in">${builtins}</optgroup>` + userOpts;
+}
+
+// Manager modal: save the current canvas, and delete existing user presets.
+window.openPresetManager = function() {
+    let modal = document.getElementById('preset-modal');
+    if(!modal) {
+        modal = document.createElement('div');
+        modal.id = 'preset-modal';
+        modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);'
+            + 'width:90vw; max-width:420px; max-height:80vh; overflow-y:auto; background:#1a1a1a;'
+            + 'border:1px solid #444; border-radius:8px; z-index:3500; padding:20px;'
+            + 'box-shadow:0 10px 30px rgba(0,0,0,0.8);';
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'block';
+    renderPresetManager();
+};
+
+function renderPresetManager() {
+    const modal = document.getElementById('preset-modal');
+    if(!modal || modal.style.display === 'none') return;
+    const users = Object.keys(getUserPresets());
+    modal.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;
+             border-bottom:1px solid #333; padding-bottom:10px;">
+            <h3 style="margin:0; color:#eee; font-size:1rem;">Presets</h3>
+            <button onclick="document.getElementById('preset-modal').style.display='none'"
+                style="background:none; border:none; color:#fff; cursor:pointer; font-size:1.4rem;
+                min-width:44px; min-height:44px;">&times;</button>
+        </div>
+        <button class="btn-gen" style="background:var(--cat-output); margin-bottom:14px;"
+            onpointerdown="saveAsPreset()">💾 Save current canvas as preset</button>
+        <div style="font-size:0.6rem; color:#666; letter-spacing:0.12em; margin-bottom:6px;">MY PRESETS</div>
+        ${users.length ? users.map(n => `
+            <div style="display:flex; gap:8px; align-items:center; padding:8px; background:#111;
+                 border:1px solid #2a2a2a; border-radius:6px; margin-bottom:6px;">
+                <span style="flex:1; color:#ddd; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis;
+                     white-space:nowrap;">${n}</span>
+                <button class="btn-tool" style="flex:0 0 auto; min-width:64px;"
+                    onpointerdown="loadPresetConfirmed('user:${n.replace(/'/g, "\\'")}'); document.getElementById('preset-modal').style.display='none';">Load</button>
+                <button class="btn-tool" style="flex:0 0 auto; min-width:64px; color:#ff7777; border-color:#5a2020;"
+                    onpointerdown="deleteUserPreset('${n.replace(/'/g, "\\'")}')">Delete</button>
+            </div>`).join('')
+        : '<div style="color:#666; font-size:0.8rem;">No saved presets yet.</div>'}
+    `;
 }
 
 window.onload = () => {
