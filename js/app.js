@@ -761,8 +761,11 @@ function drawCurve(path, x1, y1, x2, y2) {
 
 // Single source of truth for "what does the workspace look like right now".
 // Used by undo/redo history AND by save/load.
+// Bump when the shape changes; loadWorkspaceData migrates older saves.
+const SAVE_VERSION = 2;
+
 function serializeWorkspace() {
-    const state = { nodes: {}, cables: [], counter: window.nodeIdCounter };
+    const state = { version: SAVE_VERSION, nodes: {}, cables: [], counter: window.nodeIdCounter };
     for(let id in window.nodes) {
         const n = window.nodes[id];
         const nodeState = {};
@@ -915,6 +918,13 @@ window.loadWorkspaceData = function(str) {
     } catch(e) {
         return window.showToast("Invalid save file!");
     }
+    // v1 saves have no version field and the same node/cable shape, so they load
+    // as-is. Keep this tolerant: a stricter check would reject every old file.
+    if(data.version && data.version > SAVE_VERSION) {
+        return window.showToast(`Bu kayıt daha yeni bir sürümden (v${data.version})`);
+    }
+    if(!data.nodes || !data.cables) return window.showToast("Invalid save file!");
+
     isRestoring = true;   // loading a workspace is one atomic act, not undo steps
     window.undoStack = []; window.redoStack = [];
     Object.keys(window.nodes).forEach(id => window.kill(id));
@@ -953,6 +963,8 @@ window.loadWorkspaceData = function(str) {
 }
 
 window.loadWorkspace = function() {
+    if(Object.keys(window.nodes).length > 0 &&
+       !confirm('Dosya yüklemek mevcut kanvası silecek. Devam edilsin mi?')) return;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -969,9 +981,84 @@ window.loadWorkspace = function() {
     input.click();
 }
 
+// PRESETS — data, not code. Each entry lists nodes (type, position, field values
+// keyed WITHOUT the node-id suffix) and the cables to wire, by node index.
+const PRESETS = {
+    cyberpunk: {
+        label: 'Cyberpunk',
+        nodes: [
+            { type: 'scene', x: 100, y: 100, values: {
+                scn_loc: 'Fantastic: Cyber City', scn_time: 'Night Dark (19:30-04:00)',
+                scn_wea: 'Heavy Rain', scn_mood: 'Tense / Mysterious' } },
+            { type: 'character', x: 100, y: 400, values: {
+                chr_name: 'Hacker', chr_clo: 'Casual Streetwear', chr_age: 'Young Adult (18-25)',
+                chr_emo: 'Anticipation' } },
+            { type: 'style', x: 100, y: 800, values: {
+                sty_cin: 'Cyberpunk', sty_pal: 'Neon / Synthwave', sty_per: 'Near Future',
+                sty_dir: 'Denis Villeneuve' } },
+            { type: 'colorg', x: 450, y: 600, values: {
+                col_lut: 'Teal & Orange', col_stk: 'Cinestill 800T' } },
+            { type: 'stack', x: 800, y: 300 },
+        ],
+        connect: [[0, 4], [1, 4], [2, 4], [3, 4]],
+    },
+    noir: {
+        label: 'Film Noir',
+        nodes: [
+            { type: 'scene', x: 100, y: 100, values: {
+                scn_loc: 'Exterior: City Street', scn_time: 'Night Dark (19:30-04:00)',
+                scn_wea: 'Heavy Rain', scn_mood: 'Dark / Ominous' } },
+            { type: 'character', x: 100, y: 400, values: {
+                chr_name: 'Detective', chr_age: 'Middle Age (41-60)', chr_bld: 'Average',
+                chr_clo: 'Formal Suit / Dress', chr_wear: 'Slightly Worn',
+                chr_emo: 'Controlled Fury', chr_mic: 'Jaw clenching',
+                chr_pos: 'Standing straight', chr_ges: 'Hands in pockets' } },
+            { type: 'style', x: 100, y: 900, values: {
+                sty_cin: 'Film Noir', sty_per: '1950s', sty_art: 'Expressionism',
+                sty_dir: 'Roger Deakins', sty_pal: 'High Contrast B&W' } },
+            { type: 'colorg', x: 450, y: 800, values: {
+                col_lut: 'High Contrast', col_stk: 'Ilford HP5 (B&W)' } },
+            // Hard key through venetian blinds — the defining noir lighting cue.
+            { type: 'light', x: 450, y: 100, values: {
+                mode: 'industrial', brand: 'Arri', watt: '1200', kel: '4000',
+                lit_mod: 'Gobo (Blinds)', lit_gel: 'None',
+                hpos: 'camera_left', vpos: 'above', depth: 'midground' } },
+            { type: 'camera', x: 450, y: 420, values: {
+                cam: 'Arricam LT (35mm)', lens: 'Zeiss Standard Speeds',
+                mm_in: '40', mm_sl: '40', cam_ap: 'f/2.0', cam_fil: 'ProMist 1/4' } },
+            { type: 'comp', x: 800, y: 700, values: { comp_rule: 'Dutch Angle' } },
+            { type: 'stack', x: 850, y: 300 },
+        ],
+        connect: [[0, 7], [1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7]],
+    },
+};
+
+function applyPresetValues(id, values) {
+    for(const key in (values || {})) {
+        const el = document.getElementById(`${key}_${id}`);
+        if(el) el.value = values[key];
+    }
+}
+
+// UI entry point for the preset menu. Confirmation lives here, not in
+// loadPreset, so loadPreset stays a pure, testable rebuild.
+window.loadPresetConfirmed = function(name) {
+    if(!name) return;
+    const sel = document.getElementById('preset_sel');
+    if(Object.keys(window.nodes).length > 0 &&
+       !confirm('Preset yüklemek mevcut kanvası silecek. Devam edilsin mi?')) {
+        if(sel) sel.value = '';
+        return;
+    }
+    window.loadPreset(name);
+};
+
 let presetTimer = null;
 window.loadPreset = function(name) {
     if(!name) return;
+    const def = PRESETS[name];
+    if(!def) { window.showToast(`Bilinmeyen preset: ${name}`); return; }
+
     // A previous preset may still have its cable-wiring timeout pending; drop it
     // or its cables land on top of the canvas we are about to build.
     if(presetTimer) { clearTimeout(presetTimer); presetTimer = null; }
@@ -983,38 +1070,35 @@ window.loadPreset = function(name) {
     worldState = { x: 0, y: 0, zoom: 1 };
     window.updateWorld();
 
-    if (name === 'cyberpunk') {
-        window.createNode('scene'); let scn = window.nodes['node_1']; scn.el.style.left = '100px'; scn.el.style.top = '100px';
-        document.getElementById('scn_loc_node_1').value = 'Fantastic: Cyber City';
-        document.getElementById('scn_time_node_1').value = 'Night Dark (19:30-04:00)';
-        document.getElementById('scn_wea_node_1').value = 'Heavy Rain';
-        
-        window.createNode('character'); let chr = window.nodes['node_2']; chr.el.style.left = '100px'; chr.el.style.top = '400px';
-        document.getElementById('chr_name_node_2').value = 'Hacker';
-        document.getElementById('chr_clo_node_2').value = 'Casual Streetwear';
+    const ids = def.nodes.map(n => {
+        window.createNode(n.type);
+        const id = 'node_' + window.nodeIdCounter;
+        const el = window.nodes[id].el;
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        return id;
+    });
 
-        window.createNode('style'); let sty = window.nodes['node_3']; sty.el.style.left = '100px'; sty.el.style.top = '800px';
-        document.getElementById('sty_cin_node_3').value = 'Cyberpunk';
-        document.getElementById('sty_pal_node_3').value = 'Neon / Synthwave';
+    presetTimer = setTimeout(() => {
+        presetTimer = null;
+        // Values are applied here, not above: nodes with deferred init (light
+        // builds its fixture controls on a timeout) have no inputs to fill yet.
+        def.nodes.forEach((n, i) => {
+            // Changing a light's mode rebuilds its fixture controls from scratch,
+            // so switch mode first, then fill the controls that rebuild created.
+            if(n.type === 'light' && n.values && n.values.mode) {
+                const m = document.getElementById(`mode_${ids[i]}`);
+                if(m) { m.value = n.values.mode; window.toggleLight(ids[i]); }
+            }
+            applyPresetValues(ids[i], n.values);
+        });
+        def.connect.forEach(([a, b]) => window.createCable(ids[a], ids[b]));
+        updateCables(); window.triggerUpdate(); window.updateMinimap();
+        isRestoring = false;   // preset fully built; start recording undo again
+        window.undoStack = []; window.redoStack = [];
+        window.showToast(`${def.label} preset yüklendi`);
+    }, 50);
 
-        window.createNode('colorg'); let col = window.nodes['node_4']; col.el.style.left = '450px'; col.el.style.top = '600px';
-        document.getElementById('col_lut_node_4').value = 'Teal & Orange';
-        document.getElementById('col_stk_node_4').value = 'Cinestill 800T';
-
-        window.createNode('stack'); let stk = window.nodes['node_5']; stk.el.style.left = '800px'; stk.el.style.top = '300px';
-        
-        presetTimer = setTimeout(() => {
-            presetTimer = null;
-            const conn = (f, t) => window.createCable(f, t);
-            conn('node_1', 'node_5'); conn('node_2', 'node_5'); conn('node_3', 'node_5'); conn('node_4', 'node_5');
-            updateCables(); window.triggerUpdate(); window.updateMinimap();
-            isRestoring = false;   // preset is fully built; start recording undo again
-            window.undoStack = []; window.redoStack = [];
-            window.showToast("Cyberpunk Preset Loaded");
-        }, 50);
-    } else {
-        isRestoring = false;
-    }
     document.getElementById('preset_sel').value = "";
 }
 
@@ -1643,8 +1727,17 @@ function buildSubjectNav() {
     }).join('');
 }
 
+// Preset dropdown is built from PRESETS, so a new preset needs no HTML edit.
+function buildPresetMenu() {
+    const sel = document.getElementById('preset_sel');
+    if(!sel) return;
+    sel.innerHTML = '<option value="">-- Presets --</option>'
+        + Object.keys(PRESETS).map(k => `<option value="${k}">${PRESETS[k].label}</option>`).join('');
+}
+
 window.onload = () => {
     buildSubjectNav();
+    buildPresetMenu();
     if(localStorage.getItem('scene_save')) {
         window.loadWorkspaceData(localStorage.getItem('scene_save'));
     } else {

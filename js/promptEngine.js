@@ -15,6 +15,45 @@ function formatSpatial(id) {
     return `${map[d.value]}, ${map[h.value]}, ${map[v.value]}`;
 }
 
+// Final grammar pass over the assembled prompt.
+//
+// Each builder appends its own clause without knowing what will follow it, so
+// "a" vs "an" and punctuation seams can only be settled once the whole string
+// exists. Runs on every platform's output as the last step.
+const AN_EXCEPTIONS = /^(uni|use|user|eu|one)/i;   // "a university", "a one-off"
+const A_EXCEPTIONS = /^(hour|honest|heir)/i;       // "an hour"
+
+function polishPrompt(s) {
+    if (!s) return s;
+    return s
+        .replace(/\b([Aa])\s+([A-Za-z]+)/g, (m, art, word) => {
+            const vowel = /^[aeiou]/i.test(word)
+                ? !AN_EXCEPTIONS.test(word)
+                : A_EXCEPTIONS.test(word);
+            if (!vowel) return `${art} ${word}`;
+            return `${art === 'A' ? 'An' : 'an'} ${word}`;
+        })
+        .replace(/[ \t]+([,.])/g, '$1')   // " ," -> ","
+        .replace(/\.\s*,/g, ',')          // "(blinds)., Shot" -> "(blinds), Shot"
+        .replace(/,\s*\./g, '.')          // ", ." -> "."
+        .replace(/\.{2,}/g, '.')          // ".." -> "."
+        .replace(/,{2,}/g, ',')           // ",," -> ","
+        .replace(/[ \t]{2,}/g, ' ')       // collapse runs of spaces, keep newlines
+        .trim();
+}
+
+// DB stores ages as "Middle Age (41-60)"; prose wants a noun phrase that can
+// follow an adjective ("an average middle-aged adult").
+const AGE_PHRASES = {
+    'Middle Age': 'middle-aged adult',
+    'Elderly': 'elderly person',
+    'Senior': 'senior',
+};
+function charAgePhrase(raw) {
+    const base = (raw || '').replace(/\s*\(.*\)\s*$/, '');   // drop "(41-60)"
+    return (AGE_PHRASES[base] || base).toLowerCase();
+}
+
 function pluralize(w) {
     if (/[^aeiou]y$/i.test(w)) return w.slice(0, -1) + 'ies';
     if (/(s|x|z|ch|sh)$/i.test(w)) return w + 'es';
@@ -136,8 +175,11 @@ function updateStack(sid, nodes, cables) {
             charObjs.forEach(c => {
                 const id = c.id;
                 const cname = document.getElementById(`chr_name_${id}`).value || "A person";
-                const age = document.getElementById(`chr_age_${id}`).value.split(' ')[0].toLowerCase();
-                const bld = document.getElementById(`chr_bld_${id}`).value.split(' ')[0].toLowerCase();
+                // "Middle Age (41-60)" -> "middle-aged adult". Taking split(' ')[0]
+                // used to yield the bare word "middle".
+                const age = charAgePhrase(document.getElementById(`chr_age_${id}`).value);
+                // "Athletic / Muscular" -> "athletic", but "Tall & Lanky" stays whole.
+                const bld = document.getElementById(`chr_bld_${id}`).value.split(' / ')[0].toLowerCase();
                 const clo = document.getElementById(`chr_clo_${id}`).value.toLowerCase();
                 const emo = document.getElementById(`chr_emo_${id}`).value.toLowerCase();
                 const pos = document.getElementById(`chr_pos_${id}`).value.toLowerCase();
@@ -232,7 +274,8 @@ function updateStack(sid, nodes, cables) {
             let styArr = [];
             if(styleObj) {
                 styArr.push(`${document.getElementById(`sty_cin_${styleObj.id}`).value.toLowerCase()} style`);
-                styArr.push(`directed by ${document.getElementById(`sty_dir_${styleObj.id}`).value.split(' ')[0]}`);
+                // Full name — split(' ')[0] turned "Roger Deakins" into "Roger".
+                styArr.push(`directed by ${document.getElementById(`sty_dir_${styleObj.id}`).value}`);
             }
             if(colorObj) {
                 styArr.push(`${document.getElementById(`col_lut_${colorObj.id}`).value} color grading`);
@@ -254,7 +297,7 @@ function updateStack(sid, nodes, cables) {
                 if(compEnv) finalArr.push(compEnv.charAt(0).toUpperCase() + compEnv.slice(1) + ".");
                 if(compSubj) finalArr.push(compSubj + ".");
                 if(compAct) finalArr.push(compAct + ".");
-                if(compShot || compCam) finalArr.push(`${compShot ? compShot : 'Cinematic shot'} ${compCam ? compCam : ''}.`);
+                if(compShot || compCam) finalArr.push([compShot || 'Cinematic shot', compCam].filter(Boolean).join('. ') + '.');
                 if(compLit) finalArr.push(compLit);
                 if(compAudio) finalArr.push(`Audio: ${compAudio.replace(/,\s*$/, "")}.`);
             } 
@@ -265,7 +308,7 @@ function updateStack(sid, nodes, cables) {
                 if(compAct) s1 += compAct;
                 if(s1) finalArr.push(s1.trim() + ".");
                 if(compEnv) finalArr.push(`The setting is ${compEnv.replace('set in a', 'a')}.`);
-                if(compShot || compCam) finalArr.push(`${compShot ? compShot : 'Cinematic shot'} ${compCam ? compCam : ''}.`);
+                if(compShot || compCam) finalArr.push([compShot || 'Cinematic shot', compCam].filter(Boolean).join('. ') + '.');
                 if(compAudio) finalArr.push(`Soundtrack: ${compAudio.replace(/,\s*$/, "")}.`);
             }
             else if (platform === 'luma') {
@@ -418,7 +461,7 @@ function updateStack(sid, nodes, cables) {
     }
     
     const targetTextarea = document.getElementById(`val_${sid}`);
-    if(targetTextarea) targetTextarea.value = prompt;
+    if(targetTextarea) targetTextarea.value = polishPrompt(prompt);
 }
 
 function addToHistory(promptText) {

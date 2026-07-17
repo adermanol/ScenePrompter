@@ -122,8 +122,49 @@ set('loc_name_l', ''); set('loc_env_l', 'Interior'); set('loc_arch_l', 'Undefine
 set('loc_surf_l', 'Undefined'); set('loc_scale_l', 'Intimate'); set('loc_feat_l', '');
 eq('sahne varsa location "set within" ile ekleniyor; Undefined alanlar atlanıyor',
   stack('s', 'runway', n3, c3),
-  'set in a living room during noon, set within a intimate interior space,'
-  + ' The overall mood is peaceful..');
+  'set in a living room during noon, set within an intimate interior space,'
+  + ' The overall mood is peaceful.');
+
+console.log('\n=== polishPrompt() — Faz 0 dilbilgisi geçişi ===');
+eq('a -> an sesli harften önce', polishPrompt('a intimate room'), 'an intimate room');
+eq('cümle başında A -> An', polishPrompt('A elderly man'), 'An elderly man');
+eq('sessiz harf önünde a kalır', polishPrompt('a large wolf'), 'a large wolf');
+eq('"a university" bozulmuyor', polishPrompt('a university campus'), 'a university campus');
+eq('"a one-off" bozulmuyor', polishPrompt('a one-off shot'), 'a one-off shot');
+eq('"an hour" düzeltiliyor', polishPrompt('a hour later'), 'an hour later');
+eq('çift nokta tekleniyor', polishPrompt('peaceful..'), 'peaceful.');
+eq('nokta+virgül artığı', polishPrompt('(blinds)., Shot on'), '(blinds), Shot on');
+eq('virgül+nokta artığı', polishPrompt('foo, .'), 'foo.');
+eq('boşluk+virgül', polishPrompt('foo , bar'), 'foo, bar');
+eq('fazla boşluk', polishPrompt('foo   bar'), 'foo bar');
+eq('satır sonu korunuyor', polishPrompt('a apple\n\nNEGATIVE: x'), 'an apple\n\nNEGATIVE: x');
+
+console.log('\n=== charAgePhrase() ===');
+eq('"Middle Age (41-60)" -> middle-aged adult  <-- "middle" idi',
+  charAgePhrase('Middle Age (41-60)'), 'middle-aged adult');
+eq('"Young Adult (18-25)" -> young adult', charAgePhrase('Young Adult (18-25)'), 'young adult');
+eq('"Elderly (80+)" -> elderly person', charAgePhrase('Elderly (80+)'), 'elderly person');
+eq('"Child (3-12)" -> child', charAgePhrase('Child (3-12)'), 'child');
+
+console.log('\n=== Karakter: yaş + yapı + yönetmen ===');
+const n4 = {
+  s: nodes.s,
+  c: { id: 'c', type: 'character', el: { style: { left: '0px' } } },
+  st: { id: 'st', type: 'style', el: { style: { left: '1px' } } },
+};
+const c4 = [{ from: 'c', to: 's' }, { from: 'st', to: 's' }];
+spatial('c');
+set('chr_name_c', 'Detective'); set('chr_age_c', 'Middle Age (41-60)');
+set('chr_bld_c', 'Athletic / Muscular'); set('chr_clo_c', 'Formal Suit / Dress');
+set('chr_emo_c', 'Controlled Fury'); set('chr_pos_c', 'Standing straight');
+set('chr_act_c', 'Suspense: Sneaking');
+set('sty_cin_st', 'Film Noir'); set('sty_dir_st', 'Roger Deakins');
+set('sty_pal_st', 'High Contrast B&W');
+eq('yaş/yapı düzgün, yönetmen tam adıyla  <-- "a average middle" ve "Roger" idi',
+  stack('s', 'runway', n4, c4),
+  'Detective, an athletic middle-aged adult, wearing formal suit / dress, positioned'
+  + ' in the foreground, in the center, at ground level, showing expressions of controlled fury,'
+  + ' Detective is actively sneaking, film noir style, directed by Roger Deakins.');
 
 // ---------------------------------------------------------------------------
 console.log('\n=== Registry: yeni özne node\'ları ===');

@@ -30,6 +30,7 @@ const src = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js', 'js/app.js']
 // the ones the tests need to reach.
 window.eval(src + '\n;window.SUBJECTS = SUBJECTS;'
                 + '\n;window.SUBJECT_TYPES = SUBJECT_TYPES;'
+                + '\n;window.PRESETS = PRESETS;'
                 + '\n;window.serializeWorkspace = serializeWorkspace;');
 
 const doc = window.document;
@@ -149,7 +150,7 @@ async function main() {
   // mount, expose every field by its declared id, and survive a save/load round
   // trip (which is what a stale element id would break).
   const types = window.SUBJECT_TYPES || Object.keys(window.SUBJECTS || {});
-  check('registry 6 özne node tanımlıyor', types.length, 6);
+  check("registry 7 özne node tanımlıyor", types.length, 7);
   types.forEach(t => {
     window.createNode(t);
     const nid = 'node_' + window.nodeIdCounter;
@@ -180,6 +181,69 @@ async function main() {
     return nid ? doc.getElementById(`${def.prefix}_${def.fields[0].key}_${nid}`)?.value : null;
   });
   check('load sonrası tüm özne node alanları korundu', after12, before12);
+
+  console.log('\n=== 13. Presetler ===');
+  // The noir option existed in the menu but loadPreset only ever handled
+  // cyberpunk — picking it silently did nothing.
+  const presetNames = Object.keys(window.PRESETS);
+  check('en az 2 preset tanımlı', presetNames.length >= 2, true);
+  check('noir tanımlı  <-- menüde vardı ama hiç uygulanmıyordu',
+    presetNames.includes('noir'), true);
+
+  for (const name of presetNames) {
+    window.loadPreset(name);
+    await wait(150);
+    const def = window.PRESETS[name];
+    check(`${name}: doğru sayıda node kuruldu`,
+      Object.keys(window.nodes).length, def.nodes.length);
+    check(`${name}: doğru sayıda kablo kuruldu`, counts().model, def.connect.length);
+    check(`${name}: DOM tutarlı`, dom3(),
+      { g: def.connect.length, h: def.connect.length, v: def.connect.length });
+
+    // Every declared field value must actually have landed on its input.
+    const wrong = [];
+    def.nodes.forEach((n, i) => {
+      const id = 'node_' + (i + 1);
+      for (const k in (n.values || {})) {
+        const el = doc.getElementById(`${k}_${id}`);
+        if (!el) wrong.push(`${name}:${k}_${id} yok`);
+        else if (el.value !== n.values[k]) wrong.push(`${name}:${k}=${el.value}≠${n.values[k]}`);
+      }
+    });
+    check(`${name}: tüm preset değerleri uygulandı`, wrong, []);
+
+    // A preset must produce a real prompt, not the placeholder.
+    const stackId = 'node_' + (def.nodes.findIndex(n => n.type === 'stack') + 1);
+    const out = doc.getElementById(`val_${stackId}`);
+    check(`${name}: stack gerçek prompt üretti`,
+      !!out && out.value.length > 40 && !out.value.startsWith('Connect'), true);
+  }
+
+  console.log('\n=== 13b. Kayıt formatı sürümü ve v1 uyumluluğu ===');
+  await preset();
+  const snap = window.serializeWorkspace();
+  check('kayıt sürüm alanı taşıyor', snap.version, 2);
+
+  // Old saves have no `version`; they must still load rather than be rejected.
+  const v1 = JSON.parse(JSON.stringify(snap));
+  delete v1.version;
+  window.loadWorkspaceData(JSON.stringify(v1));
+  await wait(20);
+  check('sürümsüz (v1) kayıt hâlâ yükleniyor', Object.keys(window.nodes).length, 5);
+  check('v1 kabloları yüklendi', counts().model, 4);
+
+  // A save from a future version must be refused, not half-loaded.
+  const vNext = JSON.parse(JSON.stringify(snap));
+  vNext.version = 99;
+  const beforeFuture = Object.keys(window.nodes).length;
+  window.loadWorkspaceData(JSON.stringify(vNext));
+  check('gelecek sürümlü kayıt reddedildi, kanvas bozulmadı',
+    Object.keys(window.nodes).length, beforeFuture);
+
+  console.log('\n=== 14. Preset yükleme undo geçmişini kirletmiyor ===');
+  window.loadPreset('noir');
+  await wait(150);
+  check('preset sonrası undo geçmişi boş', window.undoStack.length, 0);
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);

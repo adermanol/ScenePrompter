@@ -196,5 +196,11 @@ const DB = {
     aquSpecies: ["Fish", "Dolphin", "Shark", "Whale", "Octopus", "Jellyfish", "Sea Turtle", "Manta Ray", "Eel", "Crab", "Seal"],
     aquCount: ["Single", "A Few", "School", "Massive School"],
     aquWater: ["Crystal Clear Shallows", "Sunlit Blue", "Murky Green", "Deep Dark", "Bioluminescent"],
-    aquAction: ["Swimming", "Gliding", "Hunting", "Breaching", "Drifting", "Darting Away", "Resting on Seabed"]
+    aquAction: ["Swimming", "Gliding", "Hunting", "Breaching", "Drifting", "Darting Away", "Resting on Seabed"],
+
+    // --- VFX ---
+    vfxSpecies: ["Explosion", "Fire", "Billowing Smoke", "Magic / Arcane", "Lightning", "Flying Debris", "Sparks", "Shockwave", "Portal / Rift", "Energy Beam", "Shattering Glass", "Blood Splatter", "Steam Burst", "Embers"],
+    vfxScale: ["Small", "Medium", "Large", "Massive", "Screen-filling"],
+    vfxTiming: ["Just Ignited", "Mid-blast", "At Peak", "Dissipating", "Aftermath / Smouldering"],
+    vfxColor: ["Natural", "Orange / Fiery", "Blue / Cold", "Green / Toxic", "Purple / Arcane", "White / Blinding", "Black / Oily"]
 };

@@ -46,10 +46,9 @@
         <button class="nav-btn" style="border-color:#fff" onpointerdown="createNode('stack')">Stack</button>
         <button class="nav-btn" style="border-color:#ff5555" onpointerdown="createNode('sequence')">Sequence</button>
         <div style="width: 1px; background: #333; margin: 0 5px;"></div>
-        <select id="preset_sel" onchange="loadPreset(this.value)" style="background:#111; color:#eee; border:1px solid #333; padding:5px; border-radius:4px; font-weight:bold; cursor:pointer;">
+        <!-- Options are generated from the PRESETS table in app.js -->
+        <select id="preset_sel" onchange="loadPresetConfirmed(this.value)" style="background:#111; color:#eee; border:1px solid #333; padding:5px; border-radius:4px; font-weight:bold; cursor:pointer; min-height:36px;">
             <option value="">-- Presets --</option>
-            <option value="cyberpunk">Cyberpunk</option>
-            <option value="noir">Film Noir</option>
         </select>
         <div style="width: 1px; background: #333; margin: 0 5px;"></div>
         <button class="nav-btn" style="border-color:#aa55ff" onpointerdown="openHistory()">History</button>

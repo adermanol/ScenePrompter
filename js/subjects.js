@@ -429,6 +429,78 @@ const SUBJECTS = {
             return g;
         },
     },
+    // ---------------------------------------------------------------------- VFX
+    vfx: {
+        title: 'VFX',
+        nav: { label: '💥 VFX', color: '#ff5533' },
+        prefix: 'vfx',
+        fields: [
+            { key: 'spec', label: 'EFFECT', type: 'select', options: 'vfxSpecies' },
+            { key: 'cust', type: 'text', placeholder: 'Custom effect (optional)' },
+            { key: 'scale', label: 'SCALE', type: 'select', options: 'vfxScale', default: 'Medium', half: true },
+            { key: 'color', label: 'COLOR', type: 'select', options: 'vfxColor', half: true },
+            { key: 'act', label: 'TIMING', type: 'select', options: 'vfxTiming' },
+            { key: 'note', type: 'text', placeholder: 'Custom notes' },
+        ],
+        name: v => v.cust || v.spec || 'VFX',
+        label: v => '💥 ' + (v.cust || v.spec || 'VFX'),
+        phrase: (v, sp) => {
+            const spec = lc(v.cust || v.spec) || 'effect';
+            let s = `a ${lc(v.scale)} ${spec}`;
+            if (v.color && v.color !== 'Natural') s += `, ${lc(first(v.color))} in colour`;
+            s += `, positioned ${sp}`;
+            if (v.note) s += `, ${v.note}`;
+            return s;
+        },
+        action: v => {
+            const spec = lc(v.cust || v.spec) || 'effect';
+            const t = lc(v.act);
+            // Timing is a state, not a verb — read it as a moment in the effect's life.
+            if (t.includes('ignited')) return `the ${spec} is just igniting`;
+            if (t.includes('mid-blast')) return `the ${spec} is mid-blast`;
+            if (t.includes('peak')) return `the ${spec} is at its violent peak`;
+            if (t.includes('dissipating')) return `the ${spec} is dissipating`;
+            return `the ${spec} is smouldering in the aftermath`;
+        },
+        audio: v => {
+            const s = lc(v.cust || v.spec), out = [];
+            if (s.includes('explosion') || s.includes('shockwave')) out.push('a concussive blast');
+            if (s.includes('fire') || s.includes('ember')) out.push('roaring flames');
+            if (s.includes('lightning')) out.push('a thunderclap');
+            if (s.includes('glass')) out.push('shattering glass');
+            if (s.includes('steam')) out.push('a hissing burst');
+            return out;
+        },
+        tags: v => [
+            `${v.scale} ${v.cust || v.spec}`,
+            v.color !== 'Natural' ? `${first(v.color)} coloured` : '',
+            v.act, v.note,
+        ],
+        mesh: (v, THREE) => {
+            const scales = { 'Small': 0.5, 'Medium': 1, 'Large': 1.8, 'Massive': 2.8, 'Screen-filling': 4 };
+            const colors = {
+                'Natural': 0xdd7733, 'Orange / Fiery': 0xff6611, 'Blue / Cold': 0x3399ff,
+                'Green / Toxic': 0x66cc33, 'Purple / Arcane': 0xaa44ff,
+                'White / Blinding': 0xffffff, 'Black / Oily': 0x222222,
+            };
+            const col = colors[v.color] || 0xdd7733;
+            const g = new THREE.Group();
+            // Nested translucent spheres read as a volumetric burst without particles.
+            [[10, 0.5], [7, 0.35], [4.5, 0.9]].forEach(([r, op], i) => {
+                const m = new THREE.Mesh(
+                    new THREE.SphereGeometry(r, 12, 12),
+                    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op })
+                );
+                m.position.y = 10 + i * 2;
+                g.add(m);
+            });
+            const light = new THREE.PointLight(col, 2, 120);
+            light.position.y = 12;
+            g.add(light);
+            g.scale.setScalar(scales[v.scale] || 1);
+            return g;
+        },
+    },
 };
 
 // Read every field of a subject node straight off the DOM.
