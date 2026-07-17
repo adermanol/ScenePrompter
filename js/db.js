@@ -149,6 +149,7 @@ const DB = {
     camAperture: ["f/1.2", "f/1.4", "f/2.0", "f/2.8", "f/4.0", "f/5.6", "f/8.0", "f/16.0", "f/22.0"],
     camShutter: ["1/24 (360°)", "1/48 (180° - Normal)", "1/96 (45° - Choppy)", "Long Exposure"],
     camFilter: ["None", "ProMist 1/4", "ProMist 1/8", "Polarizer", "ND Filter", "Streak Filter (Anamorphic)", "Star Filter"],
+    lightBrand: ["Arri", "Aputure", "Nanlite", "Litepanels", "Astera", "Kino Flo"],
     lightMod: ["Bare Bulb", "Softbox", "Octabox", "Beauty Dish", "Fresnel", "Snoot", "Gobo (Blinds)"],
     lightGel: ["None", "CTO (Warm)", "CTB (Cool)", "Red", "Blue", "Green", "Magenta", "Cyan", "Yellow"],
     colLut: ["Teal & Orange", "Bleach Bypass", "Cross Process", "Day for Night", "Desaturated", "High Contrast", "Vintage"],
@@ -202,5 +203,27 @@ const DB = {
     vfxSpecies: ["Explosion", "Fire", "Billowing Smoke", "Magic / Arcane", "Lightning", "Flying Debris", "Sparks", "Shockwave", "Portal / Rift", "Energy Beam", "Shattering Glass", "Blood Splatter", "Steam Burst", "Embers"],
     vfxScale: ["Small", "Medium", "Large", "Massive", "Screen-filling"],
     vfxTiming: ["Just Ignited", "Mid-blast", "At Peak", "Dissipating", "Aftermath / Smouldering"],
-    vfxColor: ["Natural", "Orange / Fiery", "Blue / Cold", "Green / Toxic", "Purple / Arcane", "White / Blinding", "Black / Oily"]
+    vfxColor: ["Natural", "Orange / Fiery", "Blue / Cold", "Green / Toxic", "Purple / Arcane", "White / Blinding", "Black / Oily"],
+
+    // --- CAMERA (added) ---
+    camFormat: ["Super 35", "Full Frame", "Large Format", "65mm", "16mm", "Anamorphic 2x", "VistaVision"],
+    camFps: ["24 fps (standard)", "25 fps (PAL)", "48 fps", "60 fps", "120 fps (slow motion)", "240 fps (extreme slow-mo)", "12 fps (stop-motion feel)"],
+    camFocus: ["Deep focus", "Shallow focus", "Split diopter", "Rack focus", "Soft focus", "Tilt-shift / miniature"],
+    camAngle: ["Eye level", "Low angle", "High angle", "Bird's eye", "Worm's eye", "Dutch tilt", "Over-the-shoulder", "Top-down"],
+
+    // --- CHARACTER (added) ---
+    charHair: ["Short cropped hair", "Long flowing hair", "Buzz cut", "Slicked back hair", "Messy unkempt hair", "Curly hair", "Braided hair", "Ponytail", "Bald", "Wet matted hair", "Grey streaked hair"],
+    charFacialHair: ["Clean shaven", "Light stubble", "Heavy stubble", "Full beard", "Moustache", "Goatee", "Long unkempt beard"],
+    charFeature: ["Facial scar", "Full sleeve tattoos", "Face tattoo", "Wire-rim glasses", "Sunglasses", "Eyepatch", "Freckles", "Heavy makeup", "Blood on face", "Dirt-streaked skin", "Cybernetic implant", "Burn marks"],
+
+    // --- STYLE (added) ---
+    styleDp: ["Roger Deakins", "Emmanuel Lubezki", "Hoyte van Hoytema", "Robert Richardson", "Greig Fraser", "Rachel Morrison", "Bradford Young", "Christopher Doyle", "Vittorio Storaro", "Janusz Kamiński"],
+    styleTexture: ["Clean digital", "Filmic and organic", "Gritty and grainy", "Painterly", "Glossy and polished", "Hazy and diffused", "Harsh and clinical", "Dreamlike and soft"],
+
+    // --- COLOR GRADE (added) ---
+    colContrast: ["Low / flat", "Natural", "Punchy", "Extreme / crushed blacks"],
+    colSaturation: ["Desaturated", "Muted", "Natural", "Rich", "Hyper-saturated"],
+    colGrain: ["None / clean", "Fine", "Moderate", "Heavy 16mm-style"],
+    colHalation: ["Subtle halation", "Strong halation around highlights", "Anamorphic bloom", "Clean, no bloom"],
+    colVignette: ["None", "Subtle", "Heavy"]
 };

@@ -37,11 +37,14 @@ const SUBJECTS = {
         label: v => '🐾 ' + (v.cust || v.spec || 'ANIMAL'),
         phrase: (v, sp) => {
             const spec = lc(v.cust || v.spec) || 'animal';
-            let s = `a ${lc(v.size)} ${lc(first(v.mood))} ${spec} with ${lc(commas(v.coat))}, positioned ${sp}`;
+            const adjs = [lc(v.size), lc(first(v.mood))].filter(Boolean).join(' ');
+            let s = `a ${adjs ? adjs + ' ' : ''}${spec}`;
+            if (v.coat) s += ` with ${lc(commas(v.coat))}`;
+            if (sp) s += `, positioned ${sp}`;
             if (v.note) s += `, ${v.note}`;
             return s;
         },
-        action: v => `the ${lc(v.cust || v.spec) || 'animal'} is ${lc(first(v.act))}`,
+        action: v => v.act ? `the ${lc(v.cust || v.spec) || 'animal'} is ${lc(first(v.act))}` : '',
         audio: v => {
             const a = lc(first(v.act)), out = [];
             if (a.includes('gallop') || a.includes('charg')) out.push('thundering hoofbeats');
@@ -94,12 +97,15 @@ const SUBJECTS = {
             + (v.count && v.count !== 'Single Specimen' ? ` (${v.count})` : ''),
         phrase: (v, sp) => {
             const spec = lc(v.cust || v.spec) || 'insect';
-            let s = `${insectNoun(lc(v.count), spec)} ${lc(v.surf)}, positioned ${sp}`;
+            let s = v.count ? insectNoun(lc(v.count), spec) : `a ${spec}`;
+            if (v.surf) s += ` ${lc(v.surf)}`;
+            if (sp) s += `, positioned ${sp}`;
             if (lc(v.scale).includes('macro')) s += ', shot in extreme macro detail';
             if (v.note) s += `, ${v.note}`;
             return s;
         },
         action: v => {
+            if (!v.beh) return '';
             const spec = lc(v.cust || v.spec) || 'insect';
             const many = /swarm|cluster|infestation|few/.test(lc(v.count));
             return `${many ? 'the ' + pluralize(spec) + ' are' : 'the ' + spec + ' is'} ${lc(v.beh)}`;
@@ -182,16 +188,20 @@ const SUBJECTS = {
             const c = lc(v.count);
             const many = c !== 'single';
             let noun;
-            if (c === 'single') noun = `a lone ${spec}`;
+            if (!c) noun = `a ${spec}`;
+            else if (c === 'single') noun = `a lone ${spec}`;
             else if (c === 'pair') noun = `a pair of ${pluralize(spec).toLowerCase()}`;
             else noun = `a ${c} of ${pluralize(spec).toLowerCase()}`;
-            let s = `${noun} ${lc(v.alt)}, positioned ${sp}`;
+            let s = noun;
+            if (v.alt) s += ` ${lc(v.alt)}`;
+            if (sp) s += `, positioned ${sp}`;
             if (v.note) s += `, ${v.note}`;
             return s;
         },
         action: v => {
+            if (!v.act) return '';
             const spec = lc(v.cust || v.spec) || 'bird';
-            const many = lc(v.count) !== 'single';
+            const many = v.count && lc(v.count) !== 'single';
             return `${many ? 'the ' + pluralize(spec) + ' are' : 'the ' + spec + ' is'} ${lc(first(v.act))}`;
         },
         audio: v => {
@@ -261,11 +271,13 @@ const SUBJECTS = {
         label: v => '🚗 ' + (v.cust || v.spec || 'VEHICLE'),
         phrase: (v, sp) => {
             const spec = lc(v.cust || v.spec) || 'vehicle';
-            let s = `a ${lc(first(v.cond))} ${lc(first(v.era))} ${spec}, positioned ${sp}`;
+            const adjs = [lc(first(v.cond)), lc(first(v.era))].filter(Boolean).join(' ');
+            let s = `a ${adjs ? adjs + ' ' : ''}${spec}`;
+            if (sp) s += `, positioned ${sp}`;
             if (v.note) s += `, ${v.note}`;
             return s;
         },
-        action: v => `the ${lc(v.cust || v.spec) || 'vehicle'} is ${lc(first(v.act))}`,
+        action: v => v.act ? `the ${lc(v.cust || v.spec) || 'vehicle'} is ${lc(first(v.act))}` : '',
         audio: v => {
             const a = lc(v.act), out = [];
             if (a.includes('speed') || a.includes('accelerat')) out.push('a roaring engine');
@@ -311,11 +323,13 @@ const SUBJECTS = {
         name: () => 'Crowd',
         label: v => '👥 ' + (v.dens ? first(v.dens).toUpperCase() + ' CROWD' : 'CROWD'),
         phrase: (v, sp) => {
-            let s = `a ${lc(first(v.dens))} crowd in ${lc(v.attire)}, positioned ${sp}`;
+            let s = `a ${v.dens ? lc(first(v.dens)) + ' ' : ''}crowd`;
+            if (v.attire) s += ` in ${lc(v.attire)}`;
+            if (sp) s += `, positioned ${sp}`;
             if (v.note) s += `, ${v.note}`;
             return s;
         },
-        action: v => `the crowd is ${lc(v.beh)}`,
+        action: v => v.beh ? `the crowd is ${lc(v.beh)}` : '',
         audio: v => {
             const b = lc(v.beh), out = [];
             if (b.includes('panic') || b.includes('flee') || b.includes('riot')) out.push('screaming and chaos');
@@ -374,16 +388,20 @@ const SUBJECTS = {
             const spec = lc(v.cust || v.spec) || 'fish';
             const c = lc(v.count);
             let noun;
-            if (c === 'single') noun = `a lone ${spec}`;
+            if (!c) noun = `a ${spec}`;
+            else if (c === 'single') noun = `a lone ${spec}`;
             else if (c === 'a few') noun = `a few ${pluralize(spec).toLowerCase()}`;
             else noun = `a ${c} of ${pluralize(spec).toLowerCase()}`;
-            let s = `${noun} in ${lc(v.water)} water, positioned ${sp}`;
+            let s = noun;
+            if (v.water) s += ` in ${lc(v.water)} water`;
+            if (sp) s += `, positioned ${sp}`;
             if (v.note) s += `, ${v.note}`;
             return s;
         },
         action: v => {
+            if (!v.act) return '';
             const spec = lc(v.cust || v.spec) || 'fish';
-            const many = lc(v.count) !== 'single';
+            const many = v.count && lc(v.count) !== 'single';
             return `${many ? 'the ' + pluralize(spec) + ' are' : 'the ' + spec + ' is'} ${lc(first(v.act))}`;
         },
         audio: v => {
@@ -446,13 +464,14 @@ const SUBJECTS = {
         label: v => '💥 ' + (v.cust || v.spec || 'VFX'),
         phrase: (v, sp) => {
             const spec = lc(v.cust || v.spec) || 'effect';
-            let s = `a ${lc(v.scale)} ${spec}`;
+            let s = `a ${v.scale ? lc(v.scale) + ' ' : ''}${spec}`;
             if (v.color && v.color !== 'Natural') s += `, ${lc(first(v.color))} in colour`;
-            s += `, positioned ${sp}`;
+            if (sp) s += `, positioned ${sp}`;
             if (v.note) s += `, ${v.note}`;
             return s;
         },
         action: v => {
+            if (!v.act) return '';
             const spec = lc(v.cust || v.spec) || 'effect';
             const t = lc(v.act);
             // Timing is a state, not a verb — read it as a moment in the effect's life.
@@ -516,8 +535,9 @@ function readSubject(type, id) {
 // Build the node body. Two consecutive `half: true` fields share a row.
 function buildSubjectHTML(type, id) {
     const def = SUBJECTS[type];
-    const opts = f => DB[f.options].map(o =>
-        `<option ${f.default === o ? 'selected' : ''}>${o}</option>`).join('');
+    // Registry fields default to the first entry unless `default` says otherwise,
+    // and every one of them can be left unassigned — see optionsHTML in app.js.
+    const opts = f => optionsHTML(DB[f.options], f.default !== undefined ? f.default : DB[f.options][0]);
     const lbl = t => `<div style="font-size:0.6rem; color:#666">${t}</div>`;
 
     const field = (f, inRow) => {

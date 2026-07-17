@@ -1,18 +1,20 @@
+const SPATIAL_WORDS = {
+    extreme_fg: "in the extreme foreground", foreground: "in the foreground", midground: "in the middle ground",
+    background: "in the background", far_bg: "far in the background", horizon: "at the horizon",
+    far_left: "at the far left edge", camera_left: "camera-left", center: "in the center",
+    camera_right: "camera-right", far_right: "at the far right edge",
+    ground: "at ground level", eye_level: "at eye level", above: "elevated above eye level",
+    overhead: "directly overhead", below: "sunken below eye level"
+};
+
+// Any of the three axes may be unassigned; each simply drops out of the phrase.
+// All three unassigned => no "positioned ..." clause at all.
 function formatSpatial(id) {
     const d = document.getElementById(`depth_${id}`);
     const h = document.getElementById(`hpos_${id}`);
     const v = document.getElementById(`vpos_${id}`);
     if (!d || !h || !v) return "";
-    
-    const map = {
-        extreme_fg: "in the extreme foreground", foreground: "in the foreground", midground: "in the middle ground",
-        background: "in the background", far_bg: "far in the background", horizon: "at the horizon",
-        far_left: "at the far left edge", camera_left: "camera-left", center: "in the center",
-        camera_right: "camera-right", far_right: "at the far right edge",
-        ground: "at ground level", eye_level: "at eye level", above: "elevated above eye level",
-        overhead: "directly overhead", below: "sunken below eye level"
-    };
-    return `${map[d.value]}, ${map[h.value]}, ${map[v.value]}`;
+    return [d.value, h.value, v.value].map(x => SPATIAL_WORDS[x]).filter(Boolean).join(', ');
 }
 
 // Final grammar pass over the assembled prompt.
@@ -134,23 +136,27 @@ function buildComposition(g) {
     let shot = '', subj = '', act = '', env = '', cam = '', lit = '', sty = '', audio = '';
 
     if (g.shot || g.move) {
+        // An absent node still implies a default; a connected-but-unassigned one
+        // means "don't mention it", so it drops out instead.
         const sType = g.shot ? val(`shot_type_${g.shot.id}`).split(' (')[0] : 'medium shot';
         const sMove = g.move ? val(`cam_move_${g.move.id}`) : 'static camera';
-        shot = `${sType.toLowerCase()}, ${sMove.toLowerCase()}`;
+        shot = [sType, sMove].filter(Boolean).map(s => s.toLowerCase()).join(', ');
     }
 
     if (g.scene) {
         const id = g.scene.id;
         const loc = val(`scn_loc_${id}`), cust = val(`scn_cust_${id}`);
         const time = val(`scn_time_${id}`), wea = val(`scn_wea_${id}`), mood = val(`scn_mood_${id}`);
-        env = `set in a ${loc.toLowerCase().replace('interior: ', '').replace('exterior: ', '')}`;
-        if (cust) env += ` with ${cust}`;
-        env += ` during ${time.split(' ')[0].toLowerCase()}`;
-        if (wea !== 'Clear') {
-            env += ` under ${wea.toLowerCase()} weather`;
+        const bits = [];
+        if (loc) bits.push(`set in a ${loc.toLowerCase().replace('interior: ', '').replace('exterior: ', '')}`);
+        if (cust) bits.push(`with ${cust}`);
+        if (time) bits.push(`during ${time.split(' ')[0].toLowerCase()}`);
+        if (wea && wea !== 'Clear') {
+            bits.push(`under ${wea.toLowerCase()} weather`);
             if (wea.includes('Rain') || wea.includes('Storm')) audio += 'sound of heavy rain and distant thunder, ';
         }
-        lit += `The overall mood is ${mood.toLowerCase()}. `;
+        env = bits.join(' ');
+        if (mood) lit += `The overall mood is ${mood.toLowerCase()}. `;
     }
 
     if (g.customLoc) {
@@ -170,10 +176,17 @@ function buildComposition(g) {
         if (arch && arch !== 'Undefined') adjs.push(arch.split(' / ')[0].toLowerCase());
         const adjStr = adjs.length ? adjs.join(', ') + ' ' : '';
 
-        let phrase = lname ? `a ${adjStr}${lname.toLowerCase()}` : `a ${adjStr}${envNoun}`;
-        if (surf && surf !== 'Undefined') phrase += ` with ${surf.toLowerCase()} ground`;
-        if (feat) phrase += `, featuring ${feat}`;
-        env = env ? `${env}, set within ${phrase}` : `set in ${phrase}`;
+        // With no name, no descriptors and no environment kind, there is nothing
+        // to say — emit nothing rather than a hollow "a environment".
+        const core = lname ? lname.toLowerCase() : (val(`loc_env_${id}`) ? envNoun : '');
+        if (core || adjStr) {
+            let phrase = `a ${adjStr}${core || envNoun}`;
+            if (surf && surf !== 'Undefined') phrase += ` with ${surf.toLowerCase()} ground`;
+            if (feat) phrase += `, featuring ${feat}`;
+            env = env ? `${env}, set within ${phrase}` : `set in ${phrase}`;
+        } else if (feat) {
+            env = env ? `${env}, featuring ${feat}` : `featuring ${feat}`;
+        }
     }
 
     const sArr = [], aArr = [];
@@ -187,10 +200,36 @@ function buildComposition(g) {
         const clo = val(`chr_clo_${id}`).toLowerCase();
         const emo = val(`chr_emo_${id}`).toLowerCase();
         const pos = val(`chr_pos_${id}`).toLowerCase();
+        // wear / micro / gesture / gait were in the UI but never reached the
+        // cinematic prompt — only Midjourney read them.
+        const wear = val(`chr_wear_${id}`).toLowerCase();
+        const micro = val(`chr_mic_${id}`).toLowerCase();
+        const ges = val(`chr_ges_${id}`).toLowerCase();
+        const gait = val(`chr_gait_${id}`).toLowerCase();
+        const hair = val(`chr_hair_${id}`).toLowerCase();
+        const beard = val(`chr_beard_${id}`).toLowerCase();
+        const feat = val(`chr_feat_${id}`).toLowerCase();
+        const prop = val(`chr_prop_${id}`).trim();
         const actEl = document.getElementById(`chr_act_${id}`);
-        const a = actEl ? actEl.value.split(': ').pop().toLowerCase() : '';
+        const a = actEl && actEl.value ? actEl.value.split(': ').pop().toLowerCase() : '';
 
-        sArr.push(`${cname}, a ${bld} ${age}, wearing ${clo}, positioned ${formatSpatial(id)}, showing expressions of ${emo}`);
+        const bits = [cname];
+        const build = [bld, age].filter(Boolean).join(' ');
+        if (build) bits.push(`a ${build}`);
+        if (hair) bits.push(`with ${hair}`);
+        if (beard) bits.push(beard);
+        if (feat) bits.push(feat);
+        // Wear is an adjective on the clothing, not an afterthought:
+        // "wearing immaculate casual streetwear", not "wearing streetwear, immaculate".
+        if (clo) bits.push(`wearing ${wear ? wear + ' ' : ''}${clo}`);
+        else if (wear) bits.push(`in ${wear} clothing`);
+        if (prop) bits.push(`holding ${prop}`);
+        const sp = formatSpatial(id);
+        if (sp) bits.push(`positioned ${sp}`);
+        if (emo) bits.push(`showing expressions of ${emo}`);
+        if (micro) bits.push(micro);
+        sArr.push(bits.join(', '));
+
         if (a) {
             aArr.push(`${cname} is actively ${a}`);
             if (a.includes('argument') || a.includes('dialog')) audio += 'muffled speaking voices, ';
@@ -198,6 +237,13 @@ function buildComposition(g) {
         } else if (pos) {
             aArr.push(`${cname} is ${pos}`);
         }
+        // Gesture and gait were in the UI but never reached the prompt. Posture
+        // stays the fallback above: pairing it with an explicit action reads as a
+        // contradiction ("actively sneaking while standing straight").
+        const body = [];
+        if (ges) body.push(ges);
+        if (gait && gait !== 'standing still') body.push(gait);
+        if (body.length) aArr.push(`${cname} is ${body.join(', ')}`);
     });
 
     // Every registry subject contributes the same three things.
@@ -216,24 +262,42 @@ function buildComposition(g) {
     if (sArr.length) { subj = sArr.join(' and '); act = aArr.join(' while '); }
 
     if (g.lights.length) {
-        lit += g.lights.map(l => {
+        const lstr = g.lights.map(l => {
             const id = l.id;
             if (val(`mode_${id}`) === 'industrial') {
-                const mod = val(`lit_mod_${id}`), gel = val(`lit_gel_${id}`);
-                let s = `illuminated by a ${val(`watt_${id}`)}W ${val(`brand_${id}`)} studio light`;
+                const mod = val(`lit_mod_${id}`), gel = val(`lit_gel_${id}`), brand = val(`brand_${id}`);
+                const fixture = [`${val(`watt_${id}`)}W`, brand].filter(Boolean).join(' ');
+                let s = `illuminated by a ${fixture} studio light`;
                 if (mod && mod !== 'Bare Bulb') s += ` with a ${mod.toLowerCase()}`;
                 if (gel && gel !== 'None') s += ` using a ${gel.toLowerCase()} gel`;
                 return s;
             }
             return `lit by natural sunlight at ${val(`time_${id}`)}:00`;
-        }).join(', ') + '. ';
+        }).filter(Boolean);
+        if (lstr.length) lit += lstr.join(', ') + '. ';
     }
 
-    if (g.atmos) env += `, featuring ${val(`atm_fx_${g.atmos.id}`).toLowerCase()} in the air`;
+    if (g.atmos) {
+        const fx = val(`atm_fx_${g.atmos.id}`);
+        if (fx) env += `${env ? ', ' : ''}featuring ${fx.toLowerCase()} in the air`;
+    }
 
     if (g.camera) {
         const id = g.camera.id;
-        cam = `Shot on ${val(`cam_${id}`)} with a ${val(`lens_${id}`)} ${val(`mm_in_${id}`)}mm lens`;
+        const body = val(`cam_${id}`), lens = val(`lens_${id}`), mm = val(`mm_in_${id}`);
+        const fmt = val(`cam_fmt_${id}`), fps = val(`cam_fps_${id}`);
+        const focus = val(`cam_focus_${id}`), angle = val(`cam_angle_${id}`);
+        const camBits = [];
+        if (body) camBits.push(`Shot on ${body}`);
+        const glass = [lens, mm ? `${mm}mm` : ''].filter(Boolean).join(' ');
+        if (glass) camBits.push(`with a ${glass} lens`);
+        cam = camBits.join(' ');
+        const extra = [];
+        if (fmt) extra.push(`${fmt} format`);
+        if (fps) extra.push(fps.toLowerCase());
+        if (focus) extra.push(focus.toLowerCase());
+        if (angle) extra.push(`${angle.toLowerCase()} angle`);
+        if (extra.length) cam += `${cam ? ', ' : ''}${extra.join(', ')}`;
         const advAct = val(`cam_adv_act_${id}`) || 'none';
         const advTgt = val(`cam_adv_tgt_${id}`);
         const advDist = val(`cam_adv_dist_${id}`);
@@ -252,12 +316,36 @@ function buildComposition(g) {
     if (g.style || g.color || g.comp) {
         const arr = [];
         if (g.style) {
-            arr.push(`${val(`sty_cin_${g.style.id}`).toLowerCase()} style`);
+            const id = g.style.id;
+            const cin = val(`sty_cin_${id}`), dir = val(`sty_dir_${id}`), dp = val(`sty_dp_${id}`);
+            const per = val(`sty_per_${id}`), art = val(`sty_art_${id}`);
+            const tex = val(`sty_tex_${id}`), ref = val(`sty_ref_${id}`).trim();
+            if (cin) arr.push(`${cin.toLowerCase()} style`);
+            if (per) arr.push(`set in the ${per.toLowerCase()}`);
+            if (art) arr.push(`${art.toLowerCase()} influence`);
             // Full name — split(' ')[0] turned "Roger Deakins" into "Roger".
-            arr.push(`directed by ${val(`sty_dir_${g.style.id}`)}`);
+            if (dir) arr.push(`directed by ${dir}`);
+            if (dp) arr.push(`shot by ${dp}`);
+            if (tex) arr.push(tex.toLowerCase());
+            if (ref) arr.push(`in the vein of ${ref}`);
         }
-        if (g.color) arr.push(`${val(`col_lut_${g.color.id}`)} color grading`);
-        if (g.comp) arr.push(`${val(`comp_rule_${g.comp.id}`).toLowerCase()} composition`);
+        if (g.color) {
+            const id = g.color.id;
+            const lut = val(`col_lut_${id}`), stock = val(`col_stk_${id}`);
+            const con = val(`col_con_${id}`), sat = val(`col_sat_${id}`);
+            const grain = val(`col_grain_${id}`), halo = val(`col_halo_${id}`), vig = val(`col_vig_${id}`);
+            if (lut) arr.push(`${lut} color grading`);
+            if (stock) arr.push(`${stock} film stock`);
+            if (con) arr.push(`${con.toLowerCase()} contrast`);
+            if (sat) arr.push(`${sat.toLowerCase()} saturation`);
+            if (grain) arr.push(`${grain.toLowerCase()} grain`);
+            if (halo) arr.push(halo.toLowerCase());
+            if (vig) arr.push(`${vig.toLowerCase()} vignette`);
+        }
+        if (g.comp) {
+            const rule = val(`comp_rule_${g.comp.id}`);
+            if (rule) arr.push(`${rule.toLowerCase()} composition`);
+        }
         sty = arr.join(', ');
     }
 
@@ -266,64 +354,88 @@ function buildComposition(g) {
 
 function buildMidjourneyTags(c, g) {
     const tags = [];
+    // `add` swallows unassigned fields so a skipped dropdown never becomes a
+    // dangling tag like " mood" or "wearing ".
+    const add = (v, fmt) => { if (v) tags.push(fmt ? fmt(v) : v); };
+
     if (g.scene) {
         const id = g.scene.id;
-        tags.push(val(`scn_loc_${id}`).replace('Interior: ', '').replace('Exterior: ', ''));
-        const cust = val(`scn_cust_${id}`);
-        if (cust) tags.push(cust);
-        tags.push(val(`scn_time_${id}`).split(' ')[0]);
-        tags.push(val(`scn_wea_${id}`));
-        tags.push(val(`scn_mood_${id}`) + ' mood');
+        add(val(`scn_loc_${id}`), v => v.replace('Interior: ', '').replace('Exterior: ', ''));
+        add(val(`scn_cust_${id}`));
+        add(val(`scn_time_${id}`), v => v.split(' ')[0]);
+        add(val(`scn_wea_${id}`));
+        add(val(`scn_mood_${id}`), v => v + ' mood');
     }
     g.chars.forEach(ch => {
         const id = ch.id;
         tags.push(val(`chr_name_${id}`) || 'person');
-        tags.push(val(`chr_age_${id}`).split(' ')[0]);
-        tags.push(val(`chr_bld_${id}`).split(' ')[0] + ' build');
-        tags.push('wearing ' + val(`chr_clo_${id}`));
-        tags.push(val(`chr_emo_${id}`) + ' expression');
+        add(val(`chr_age_${id}`), v => v.split(' ')[0]);
+        add(val(`chr_bld_${id}`), v => v.split(' ')[0] + ' build');
+        add(val(`chr_clo_${id}`), v => 'wearing ' + v);
+        add(val(`chr_wear_${id}`));
+        add(val(`chr_hair_${id}`));
+        add(val(`chr_beard_${id}`));
+        add(val(`chr_feat_${id}`));
+        add(val(`chr_prop_${id}`), v => 'holding ' + v);
+        add(val(`chr_emo_${id}`), v => v + ' expression');
+        add(val(`chr_mic_${id}`));
+        add(val(`chr_ges_${id}`));
+        add(val(`chr_gait_${id}`));
         const actEl = document.getElementById(`chr_act_${id}`);
-        if (actEl) tags.push(actEl.value.split(': ').pop());
+        if (actEl && actEl.value) tags.push(actEl.value.split(': ').pop());
     });
     if (g.customLoc) {
         const id = g.customLoc.id;
-        const lname = val(`loc_name_${id}`).trim();
         const arch = val(`loc_arch_${id}`), surf = val(`loc_surf_${id}`);
-        const feat = val(`loc_feat_${id}`).trim();
-        if (lname) tags.push(lname);
-        tags.push(val(`loc_env_${id}`));
+        add(val(`loc_name_${id}`).trim());
+        add(val(`loc_env_${id}`));
         if (arch && arch !== 'Undefined') tags.push(arch);
         if (surf && surf !== 'Undefined') tags.push(surf + ' ground');
-        tags.push(val(`loc_scale_${id}`).split(' /')[0] + ' scale');
-        if (feat) tags.push(feat);
+        add(val(`loc_scale_${id}`), v => v.split(' /')[0] + ' scale');
+        add(val(`loc_feat_${id}`).trim());
     }
     g.subjects.forEach(sn => {
         const def = SUBJECTS[sn.type];
         const v = readSubject(sn.type, sn.id);
         (def.tags ? def.tags(v) : []).forEach(t => tags.push(t));
     });
-    g.objects.forEach(o => tags.push(val(`val_${o.id}`)));
-    if (g.atmos) tags.push(val(`atm_fx_${g.atmos.id}`));
+    g.objects.forEach(o => add(val(`val_${o.id}`)));
+    if (g.atmos) add(val(`atm_fx_${g.atmos.id}`));
     if (g.style) {
         const id = g.style.id;
-        tags.push(val(`sty_cin_${id}`));
-        tags.push('directed by ' + val(`sty_dir_${id}`));
-        tags.push(val(`sty_pal_${id}`) + ' colors');
+        add(val(`sty_cin_${id}`));
+        add(val(`sty_per_${id}`));
+        add(val(`sty_art_${id}`));
+        add(val(`sty_dir_${id}`), v => 'directed by ' + v);
+        add(val(`sty_dp_${id}`), v => 'shot by ' + v);
+        add(val(`sty_pal_${id}`), v => v + ' colors');
+        add(val(`sty_tex_${id}`));
+        add(val(`sty_ref_${id}`).trim());
     }
     if (g.color) {
-        tags.push(val(`col_lut_${g.color.id}`) + ' color grading');
-        tags.push(val(`col_stk_${g.color.id}`) + ' film stock');
+        const id = g.color.id;
+        add(val(`col_lut_${id}`), v => v + ' color grading');
+        add(val(`col_stk_${id}`), v => v + ' film stock');
+        add(val(`col_con_${id}`), v => v + ' contrast');
+        add(val(`col_sat_${id}`), v => v + ' saturation');
+        add(val(`col_grain_${id}`), v => v + ' grain');
+        add(val(`col_halo_${id}`));
+        add(val(`col_vig_${id}`), v => v + ' vignette');
     }
-    if (g.comp) tags.push(val(`comp_rule_${g.comp.id}`));
-    if (g.shot) tags.push(val(`shot_type_${g.shot.id}`));
-    if (g.move) tags.push(val(`cam_move_${g.move.id}`));
+    if (g.comp) add(val(`comp_rule_${g.comp.id}`));
+    if (g.shot) add(val(`shot_type_${g.shot.id}`));
+    if (g.move) add(val(`cam_move_${g.move.id}`));
     if (g.camera) {
         const id = g.camera.id;
-        tags.push('shot on ' + val(`cam_${id}`));
-        tags.push(val(`lens_${id}`) + ' lens');
-        tags.push(val(`mm_in_${id}`) + 'mm');
-        tags.push(val(`cam_ap_${id}`));
-        tags.push('ISO ' + val(`cam_iso_${id}`));
+        add(val(`cam_${id}`), v => 'shot on ' + v);
+        add(val(`lens_${id}`), v => v + ' lens');
+        add(val(`mm_in_${id}`), v => v + 'mm');
+        add(val(`cam_fmt_${id}`), v => v + ' format');
+        add(val(`cam_ap_${id}`));
+        add(val(`cam_iso_${id}`), v => 'ISO ' + v);
+        add(val(`cam_fps_${id}`));
+        add(val(`cam_focus_${id}`));
+        add(val(`cam_angle_${id}`), v => v + ' angle');
         const fil = val(`cam_fil_${id}`);
         if (fil && fil !== 'None') tags.push(fil);
         const advAct = val(`cam_adv_act_${id}`) || 'none';

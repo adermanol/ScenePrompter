@@ -26,7 +26,7 @@ window.threePreviews = {};
 
 // INFINITE VIEWPORT POINTER EVENTS
 viewport.addEventListener('pointerdown', (e) => {
-    if(!spaceDown && (e.target.closest('.node-content') || e.target.closest('.top-nav'))) return;
+    if(!spaceDown && (e.target.closest('.node-content') || e.target.closest('.top-bar'))) return;
     if(spaceDown || e.target === viewport || e.target.classList.contains('grid-layer')) {
         if(window.clearCableSelection) window.clearCableSelection();
         activePointers.push(e);
@@ -117,36 +117,95 @@ window.updateMinimap = function() {
     vp.style.top = (50 - worldState.y * scale) + 'px';
 }
 
+// ---------------------------------------------------------------------------
+// FIELDS
+//
+// Every dropdown carries an "unassigned" choice. An unassigned field is not a
+// blank value in the prompt — it is left out of the sentence entirely, so a
+// module can be as specific or as loose as the shot needs. The prompt engine
+// treats '' as "say nothing about this".
+//
+// Existing fields keep their old default so saved workspaces read the same;
+// fields added later default to unassigned, making new detail opt-in.
+// ---------------------------------------------------------------------------
+const UNSET_LABEL = '— belirtilmemiş';
+
+// ---------------------------------------------------------------------------
+// CATEGORIES
+//
+// Six stages of getting a shot made. Every node belongs to exactly one; the
+// category drives the nav button colour, the node's header rail, its output
+// socket and the quick-add palette. One table, so a button and the node it
+// creates can never disagree about what colour they are.
+// ---------------------------------------------------------------------------
+const CATEGORIES = {
+    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render'] },
+    subject: { label: 'SUBJECT', types: ['character', 'object'] },   // + registry subjects
+    light:   { label: 'LIGHT',   types: ['light', 'atmos'] },
+    camera:  { label: 'CAMERA',  types: ['camera', 'shot', 'cammove', 'position'] },
+    grade:   { label: 'GRADE',   types: ['colorg', 'comp', 'preview'] },
+    output:  { label: 'OUTPUT',  types: ['stack', 'sequence', 'neg'] },
+};
+
+function categoryOf(type) {
+    if (typeof SUBJECTS !== 'undefined' && SUBJECTS[type]) return 'subject';
+    for (const key in CATEGORIES) if (CATEGORIES[key].types.includes(type)) return key;
+    return 'source';
+}
+
+function optionsHTML(list, def) {
+    return `<option value="">${UNSET_LABEL}</option>`
+        + list.map(o => `<option ${o === def ? 'selected' : ''}>${o}</option>`).join('');
+}
+
+// `def` omitted => the field starts unassigned.
+function selHTML(id, list, def) {
+    return `<select id="${id}" onchange="triggerUpdate()">${optionsHTML(list, def)}</select>`;
+}
+
+// A labelled field, optionally half-width for side-by-side rows.
+function fieldHTML(label, id, list, def) {
+    return `<div style="font-size:0.6rem; color:#666; margin-top:5px">${label}</div>${selHTML(id, list, def)}`;
+}
+
+function rowHTML(a, b) {
+    return `<div style="display:flex; gap:5px; margin-top:5px">
+        <div style="flex:1">${a}</div><div style="flex:1">${b}</div></div>`;
+}
+
+// Groups related fields inside a node that has grown past a handful of them.
+function sectionHTML(label) {
+    return `<div style="display:flex; align-items:center; gap:8px; margin:12px 0 2px;">
+        <span style="font-size:0.55rem; letter-spacing:0.12em; color:#555; white-space:nowrap;">${label}</span>
+        <span style="flex:1; height:1px; background:#2a2a2a;"></span>
+    </div>`;
+}
+
 function getSpatialContextHTML(id) {
+    const axis = (label, kind, opts, def) => `
+            <div style="font-size:0.6rem; color:#666">${label}</div>
+            <select id="${kind}_${id}" onchange="triggerUpdate()">
+                <option value="">${UNSET_LABEL}</option>
+                ${opts.map(([v, t]) => `<option value="${v}" ${v === def ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>`;
     return `
     <details class="spatial-panel">
-        <summary>📍 SPATIAL CONTEXT</summary>
+        <summary>\u{1F4CD} SPATIAL CONTEXT</summary>
         <div class="spatial-grid">
-            <div style="font-size:0.6rem; color:#666">DEPTH</div>
-            <select id="depth_${id}" onchange="triggerUpdate()">
-                <option value="extreme_fg">Extreme Foreground</option>
-                <option value="foreground" selected>Foreground</option>
-                <option value="midground">Midground</option>
-                <option value="background">Background</option>
-                <option value="far_bg">Far Background</option>
-                <option value="horizon">Horizon</option>
-            </select>
-            <div style="font-size:0.6rem; color:#666">HORIZONTAL</div>
-            <select id="hpos_${id}" onchange="triggerUpdate()">
-                <option value="far_left">Far Left</option>
-                <option value="camera_left">Camera-Left</option>
-                <option value="center" selected>Center</option>
-                <option value="camera_right">Camera-Right</option>
-                <option value="far_right">Far Right</option>
-            </select>
-            <div style="font-size:0.6rem; color:#666">VERTICAL</div>
-            <select id="vpos_${id}" onchange="triggerUpdate()">
-                <option value="ground">Ground Level</option>
-                <option value="eye_level" selected>Eye Level</option>
-                <option value="above">Above</option>
-                <option value="overhead">Overhead</option>
-                <option value="below">Below (Sunken)</option>
-            </select>
+            ${axis('DEPTH', 'depth', [
+                ['extreme_fg', 'Extreme Foreground'], ['foreground', 'Foreground'],
+                ['midground', 'Midground'], ['background', 'Background'],
+                ['far_bg', 'Far Background'], ['horizon', 'Horizon'],
+            ], 'foreground')}
+            ${axis('HORIZONTAL', 'hpos', [
+                ['far_left', 'Far Left'], ['camera_left', 'Camera-Left'],
+                ['center', 'Center'], ['camera_right', 'Camera-Right'],
+                ['far_right', 'Far Right'],
+            ], 'center')}
+            ${axis('VERTICAL', 'vpos', [
+                ['ground', 'Ground Level'], ['eye_level', 'Eye Level'],
+                ['above', 'Above'], ['overhead', 'Overhead'], ['below', 'Below (Sunken)'],
+            ], 'eye_level')}
         </div>
     </details>`;
 }
@@ -171,15 +230,15 @@ window.createNode = function(type) {
         title = "SCENE"; hasIn = false; hasOut = true;
         content = `
             <div style="font-size:0.6rem; color:#666">LOCATION</div>
-            <select id="scn_loc_${id}" onchange="triggerUpdate()">${DB.sceneLoc.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${selHTML(`scn_loc_${id}`, DB.sceneLoc, DB.sceneLoc[0])}
             <input type="text" class="obj-input" id="scn_cust_${id}" placeholder="Custom details (e.g. broken glass)" oninput="triggerUpdate()" style="margin-top:5px">
             
             <div style="font-size:0.6rem; color:#666; margin-top:5px">TIME OF DAY</div>
-            <select id="scn_time_${id}" onchange="triggerUpdate()">${DB.sceneTime.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${selHTML(`scn_time_${id}`, DB.sceneTime, DB.sceneTime[0])}
             
             <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">WEATHER</div><select id="scn_wea_${id}" onchange="triggerUpdate()">${DB.sceneWeather.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">MOOD</div><select id="scn_mood_${id}" onchange="triggerUpdate()">${DB.sceneMood.map(o=>`<option>${o}</option>`).join('')}</select></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">WEATHER</div>${selHTML(`scn_wea_${id}`, DB.sceneWeather, DB.sceneWeather[0])}</div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">MOOD</div>${selHTML(`scn_mood_${id}`, DB.sceneMood, DB.sceneMood[0])}</div>
             </div>
             
             <div style="font-size:0.6rem; color:#666; margin-top:5px">DENSITY (1-10)</div>
@@ -189,47 +248,52 @@ window.createNode = function(type) {
     else if (type === 'style') {
         title = "STYLE"; hasIn = false; hasOut = true;
         content = `
-            <div style="font-size:0.6rem; color:#666">CINEMATIC STYLE</div>
-            <select id="sty_cin_${id}" onchange="triggerUpdate()">${DB.styleCinematic.map(o=>`<option>${o}</option>`).join('')}</select>
-            
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">PERIOD</div><select id="sty_per_${id}" onchange="triggerUpdate()">${DB.stylePeriod.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">ART MOVEMENT</div><select id="sty_art_${id}" onchange="triggerUpdate()">${DB.styleArt.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">DIRECTOR REF</div>
-            <select id="sty_dir_${id}" onchange="triggerUpdate()">${DB.styleDirector.map(o=>`<option>${o}</option>`).join('')}</select>
-            
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">COLOR PALETTE</div>
-            <select id="sty_pal_${id}" onchange="triggerUpdate()">${DB.stylePalette.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${fieldHTML('CINEMATIC STYLE', `sty_cin_${id}`, DB.styleCinematic, DB.styleCinematic[0])}
+            ${rowHTML(
+                fieldHTML('PERIOD', `sty_per_${id}`, DB.stylePeriod, DB.stylePeriod[0]),
+                fieldHTML('ART MOVEMENT', `sty_art_${id}`, DB.styleArt, DB.styleArt[0])
+            )}
+            ${sectionHTML('AUTHORSHIP')}
+            ${fieldHTML('DIRECTOR REF', `sty_dir_${id}`, DB.styleDirector, DB.styleDirector[0])}
+            ${fieldHTML('CINEMATOGRAPHER', `sty_dp_${id}`, DB.styleDp)}
+            ${sectionHTML('LOOK')}
+            ${fieldHTML('COLOR PALETTE', `sty_pal_${id}`, DB.stylePalette, DB.stylePalette[0])}
+            ${fieldHTML('TEXTURE / FINISH', `sty_tex_${id}`, DB.styleTexture)}
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">INFLUENCE / REFERENCE</div>
+            <input type="text" class="obj-input" id="sty_ref_${id}" placeholder="e.g. Blade Runner 2049" oninput="triggerUpdate()">
         `;
     }
     else if (type === 'character') {
         title = "CHARACTER"; hasIn = false; hasOut = true;
         content = `
             <input type="text" class="obj-input" id="chr_name_${id}" placeholder="Character Name/Role" oninput="triggerUpdate()">
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">AGE</div><select id="chr_age_${id}" onchange="triggerUpdate()">${DB.charAge.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">BUILD</div><select id="chr_bld_${id}" onchange="triggerUpdate()">${DB.charBuild.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">CLOTHING</div>
-            <select id="chr_clo_${id}" onchange="triggerUpdate()">${DB.charClothing.map(o=>`<option>${o}</option>`).join('')}</select>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">WEAR LEVEL</div>
-            <select id="chr_wear_${id}" onchange="triggerUpdate()">${DB.charWear.map(o=>`<option>${o}</option>`).join('')}</select>
-            <hr style="border:0; border-top:1px solid #333; margin:10px 0">
-            <div style="font-size:0.6rem; color:#666">EMOTION</div>
-            <select id="chr_emo_${id}" onchange="triggerUpdate()">${DB.charEmotion.map(o=>`<option>${o}</option>`).join('')}</select>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">MICRO-EXPRESSION</div>
-            <select id="chr_mic_${id}" onchange="triggerUpdate()">${DB.charMicro.map(o=>`<option>${o}</option>`).join('')}</select>
-            <hr style="border:0; border-top:1px solid #333; margin:10px 0">
-            <div style="font-size:0.6rem; color:#666">POSTURE</div>
-            <select id="chr_pos_${id}" onchange="triggerUpdate()">${DB.charPosture.map(o=>`<option>${o}</option>`).join('')}</select>
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">GESTURE</div><select id="chr_ges_${id}" onchange="triggerUpdate()">${DB.charGesture.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">GAIT</div><select id="chr_gait_${id}" onchange="triggerUpdate()">${DB.charGait.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">ACTION TYPE</div>
-            <select id="chr_act_${id}" onchange="triggerUpdate()">${DB.sceneAction.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${rowHTML(
+                fieldHTML('AGE', `chr_age_${id}`, DB.charAge, DB.charAge[0]),
+                fieldHTML('BUILD', `chr_bld_${id}`, DB.charBuild, DB.charBuild[0])
+            )}
+            ${sectionHTML('APPEARANCE')}
+            ${rowHTML(
+                fieldHTML('HAIR', `chr_hair_${id}`, DB.charHair),
+                fieldHTML('FACIAL HAIR', `chr_beard_${id}`, DB.charFacialHair)
+            )}
+            ${fieldHTML('DISTINGUISHING FEATURE', `chr_feat_${id}`, DB.charFeature)}
+            ${rowHTML(
+                fieldHTML('CLOTHING', `chr_clo_${id}`, DB.charClothing, DB.charClothing[0]),
+                fieldHTML('WEAR LEVEL', `chr_wear_${id}`, DB.charWear, DB.charWear[0])
+            )}
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">HELD PROP</div>
+            <input type="text" class="obj-input" id="chr_prop_${id}" placeholder="e.g. a revolver, a lantern" oninput="triggerUpdate()">
+            ${sectionHTML('PERFORMANCE')}
+            ${rowHTML(
+                fieldHTML('EMOTION', `chr_emo_${id}`, DB.charEmotion, DB.charEmotion[0]),
+                fieldHTML('MICRO-EXPRESSION', `chr_mic_${id}`, DB.charMicro, DB.charMicro[0])
+            )}
+            ${fieldHTML('POSTURE', `chr_pos_${id}`, DB.charPosture, DB.charPosture[0])}
+            ${rowHTML(
+                fieldHTML('GESTURE', `chr_ges_${id}`, DB.charGesture, DB.charGesture[0]),
+                fieldHTML('GAIT', `chr_gait_${id}`, DB.charGait, DB.charGait[0])
+            )}
+            ${fieldHTML('ACTION TYPE', `chr_act_${id}`, DB.sceneAction, DB.sceneAction[0])}
             <input type="text" class="obj-input" id="chr_cust_${id}" placeholder="Custom action notes" oninput="triggerUpdate()" style="margin-top:5px">
             ${getSpatialContextHTML(id)}
         `;
@@ -237,31 +301,41 @@ window.createNode = function(type) {
     else if (type === 'shot') {
         hasIn = false; hasOut = true; title = "SHOT TYPE";
         content = `<div style="font-size:0.6rem; color:#666">SHOT FRAMING</div>
-            <select id="shot_type_${id}" onchange="triggerUpdate()">${DB.shotType.map(o=>`<option>${o}</option>`).join('')}</select>`;
+            ${selHTML(`shot_type_${id}`, DB.shotType, DB.shotType[0])}`;
     }
     else if (type === 'cammove') {
         hasIn = false; hasOut = true; title = "CAMERA MOVEMENT";
         content = `<div style="font-size:0.6rem; color:#666">MOVEMENT / RIG</div>
-            <select id="cam_move_${id}" onchange="triggerUpdate()">${DB.camMove.map(o=>`<option>${o}</option>`).join('')}</select>`;
+            ${selHTML(`cam_move_${id}`, DB.camMove, DB.camMove[0])}`;
     }
     else if (type === 'atmos') {
         hasIn = false; hasOut = true; title = "ATMOSPHERE";
         content = `<div style="font-size:0.6rem; color:#666">ENVIRONMENT EFFECTS</div>
-            <select id="atm_fx_${id}" onchange="triggerUpdate()">${DB.atmos.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${selHTML(`atm_fx_${id}`, DB.atmos, DB.atmos[0])}
             <div style="font-size:0.6rem; color:#666; margin-top:5px">INTENSITY (1-10)</div>
             <input type="range" id="atm_int_${id}" min="1" max="10" value="5" oninput="triggerUpdate()">`;
     }
     else if (type === 'colorg') {
         hasIn = false; hasOut = true; title = "COLOR GRADE";
-        content = `<div style="font-size:0.6rem; color:#666">LUT / LOOK</div>
-            <select id="col_lut_${id}" onchange="triggerUpdate()">${DB.colLut.map(o=>`<option>${o}</option>`).join('')}</select>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">FILM STOCK</div>
-            <select id="col_stk_${id}" onchange="triggerUpdate()">${DB.colStock.map(o=>`<option>${o}</option>`).join('')}</select>`;
+        content = `
+            ${fieldHTML('LUT / LOOK', `col_lut_${id}`, DB.colLut, DB.colLut[0])}
+            ${fieldHTML('FILM STOCK', `col_stk_${id}`, DB.colStock, DB.colStock[0])}
+            ${sectionHTML('GRADE')}
+            ${rowHTML(
+                fieldHTML('CONTRAST', `col_con_${id}`, DB.colContrast),
+                fieldHTML('SATURATION', `col_sat_${id}`, DB.colSaturation)
+            )}
+            ${rowHTML(
+                fieldHTML('GRAIN', `col_grain_${id}`, DB.colGrain),
+                fieldHTML('VIGNETTE', `col_vig_${id}`, DB.colVignette)
+            )}
+            ${fieldHTML('HALATION / BLOOM', `col_halo_${id}`, DB.colHalation)}
+        `;
     }
     else if (type === 'comp') {
         hasIn = false; hasOut = true; title = "COMPOSITION";
         content = `<div style="font-size:0.6rem; color:#666">COMPOSITION RULE</div>
-            <select id="comp_rule_${id}" onchange="triggerUpdate()">${DB.compRule.map(o=>`<option>${o}</option>`).join('')}</select>`;
+            ${selHTML(`comp_rule_${id}`, DB.compRule, DB.compRule[0])}`;
     }
     else if (type === 'neg') {
         hasIn = false; hasOut = true; title = "NEGATIVE PROMPT";
@@ -271,10 +345,10 @@ window.createNode = function(type) {
     else if (type === 'render') {
         hasIn = false;
         content = `<div style="font-size:0.6rem; color:#666">ENGINE</div>
-            <select id="eng_${id}" onchange="triggerUpdate()">${DB.render.map(r=>`<option>${r}</option>`).join('')}</select>
+            ${selHTML(`eng_${id}`, DB.render, DB.render[0])}
             <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">RATIO</div><select id="rat_${id}" onchange="triggerUpdate()">${DB.ratio.map(r=>`<option>${r}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">RES</div><select id="res_${id}" onchange="triggerUpdate()">${DB.res.map(r=>`<option>${r}</option>`).join('')}</select></div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">RATIO</div>${selHTML(`rat_${id}`, DB.ratio, DB.ratio[0])}</div>
+                <div style="flex:1"><div style="font-size:0.6rem; color:#666">RES</div>${selHTML(`res_${id}`, DB.res, DB.res[0])}</div>
             </div>`;
     }
     else if (type === 'light') {
@@ -289,42 +363,51 @@ window.createNode = function(type) {
     }
     else if (type === 'camera') {
         title = "CAMERA";
-        
-        let camOptions = DB.camBodies.map(brand => 
-            `<optgroup label="${brand.brand}">` + 
-            brand.models.map(m => `<option value="${m.name}" data-flavor="${m.flavor}">${m.name}</option>`).join('') + 
-            `</optgroup>`
-        ).join('');
-        
-        let lensOptions = DB.camLenses.map(brand => 
-            `<optgroup label="${brand.brand}">` + 
-            brand.models.map(m => `<option value="${m.name}" data-flavor="${m.flavor}">${m.name}</option>`).join('') + 
+
+        // The body/lens pickers are optgroup-based, so they get the unassigned
+        // option prepended by hand rather than via selHTML.
+        const optGroups = list => `<option value="">${UNSET_LABEL}</option>` + list.map(brand =>
+            `<optgroup label="${brand.brand}">` +
+            brand.models.map(m => `<option value="${m.name}" data-flavor="${m.flavor}">${m.name}</option>`).join('') +
             `</optgroup>`
         ).join('');
 
-        content = `<div style="font-size:0.6rem; color:#666">BODY</div>
-            <select id="cam_${id}" onchange="updateCamFlavor('${id}'); triggerUpdate();">${camOptions}</select>
+        content = `
+            ${sectionHTML('BODY & GLASS')}
+            <div style="font-size:0.6rem; color:#666">BODY</div>
+            <select id="cam_${id}" onchange="updateCamFlavor('${id}'); triggerUpdate();">${optGroups(DB.camBodies)}</select>
             <div id="cam_flav_${id}" style="font-size:0.55rem; color:var(--accent); margin-top:2px; font-style:italic; line-height:1.2;"></div>
-            
+
             <div style="font-size:0.6rem; color:#666; margin-top:5px">LENS SERIES</div>
-            <select id="lens_${id}" onchange="updateCamFlavor('${id}'); triggerUpdate();">${lensOptions}</select>
+            <select id="lens_${id}" onchange="updateCamFlavor('${id}'); triggerUpdate();">${optGroups(DB.camLenses)}</select>
             <div id="lens_flav_${id}" style="font-size:0.55rem; color:var(--accent); margin-top:2px; font-style:italic; line-height:1.2;"></div>
+
+            ${fieldHTML('SENSOR / FORMAT', `cam_fmt_${id}`, DB.camFormat)}
 
             <div style="font-size:0.6rem; color:#666; margin-top:5px;">FOCAL LENGTH (mm)</div>
             <div style="display:flex; align-items:center; gap:5px;">
-                <input type="number" id="mm_in_${id}" min="2" max="2000" value="50" style="width:50px; text-align:center;" oninput="syncCam('${id}', this.value)">
+                <input type="number" id="mm_in_${id}" min="2" max="2000" value="50" style="width:56px; text-align:center;" oninput="syncCam('${id}', this.value)">
                 <input type="range" id="mm_sl_${id}" min="2" max="2000" value="50" oninput="syncCam('${id}', this.value)">
             </div>
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">APERTURE</div><select id="cam_ap_${id}" onchange="triggerUpdate()">${DB.camAperture.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">SHUTTER</div><select id="cam_sh_${id}" onchange="triggerUpdate()">${DB.camShutter.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">ISO</div><select id="cam_iso_${id}" onchange="triggerUpdate()">${DB.camIso.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">FILTER</div><select id="cam_fil_${id}" onchange="triggerUpdate()">${DB.camFilter.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            <hr style="border:0; border-top:1px solid #333; margin:10px 0">
-            <div style="font-size:0.6rem; color:#666">ADVANCED TRACKING</div>
+
+            ${sectionHTML('EXPOSURE')}
+            ${rowHTML(
+                fieldHTML('APERTURE', `cam_ap_${id}`, DB.camAperture, DB.camAperture[0]),
+                fieldHTML('SHUTTER', `cam_sh_${id}`, DB.camShutter, DB.camShutter[0])
+            )}
+            ${rowHTML(
+                fieldHTML('ISO', `cam_iso_${id}`, DB.camIso, DB.camIso[0]),
+                fieldHTML('FILTER', `cam_fil_${id}`, DB.camFilter, DB.camFilter[0])
+            )}
+            ${fieldHTML('FRAME RATE', `cam_fps_${id}`, DB.camFps)}
+
+            ${sectionHTML('FRAMING')}
+            ${rowHTML(
+                fieldHTML('FOCUS', `cam_focus_${id}`, DB.camFocus),
+                fieldHTML('ANGLE', `cam_angle_${id}`, DB.camAngle)
+            )}
+
+            ${sectionHTML('ADVANCED TRACKING')}
             <div style="display:flex; gap:5px; margin-top:5px">
                 <div style="flex:1"><div style="font-size:0.6rem; color:#666">ACTION</div>
                 <select id="cam_adv_act_${id}" onchange="triggerUpdate()">
@@ -340,16 +423,14 @@ window.createNode = function(type) {
                     <option value="">-- Select Target --</option>
                 </select></div>
             </div>
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">KEEP DISTANCE</div>
-                <select id="cam_adv_dist_${id}" onchange="triggerUpdate()">
-                    <option value="">Auto (Don't specify)</option>
-                    <option value="extreme close proximity">Extreme Close</option>
-                    <option value="close proximity (1m)">Close (1m)</option>
-                    <option value="medium distance (3m)">Medium (3m)</option>
-                    <option value="far distance (10m)">Far (10m)</option>
-                </select></div>
-            </div>
+            <div style="font-size:0.6rem; color:#666; margin-top:5px">KEEP DISTANCE</div>
+            <select id="cam_adv_dist_${id}" onchange="triggerUpdate()">
+                <option value="">Auto (Don't specify)</option>
+                <option value="extreme close proximity">Extreme Close</option>
+                <option value="close proximity (1m)">Close (1m)</option>
+                <option value="medium distance (3m)">Medium (3m)</option>
+                <option value="far distance (10m)">Far (10m)</option>
+            </select>
             ${getSpatialContextHTML(id)}`;
         setTimeout(() => {
             if(window.updateCamFlavor) window.updateCamFlavor(id);
@@ -445,10 +526,16 @@ window.createNode = function(type) {
         `;
     }
 
+    const cat = categoryOf(type);
+    el.setAttribute('data-cat', cat);
+
     el.innerHTML = `
         ${hasIn ? `<div class="socket-wrapper in" data-node="${id}"><div class="socket"></div></div>` : ''}
         <div class="node-header" onpointerdown="nodeDrag(event, '${id}')">
-            <span>${title}</span>
+            <span class="node-title">
+                <span class="node-cat">${CATEGORIES[cat].label}</span>
+                <span>${title}</span>
+            </span>
             <span class="close-btn" onpointerdown="event.stopPropagation()" onclick="kill('${id}')">×</span>
         </div>
         <div class="node-content">${content}</div>
@@ -470,13 +557,13 @@ window.toggleLight = function(id) {
     if(mode === 'industrial') {
         div.innerHTML = `
             <div style="font-size:0.6rem; color:#666">FIXTURE</div>
-            <select id="brand_${id}" onchange="triggerUpdate()"><option>Arri</option><option>Aputure</option><option>Nanlite</option></select>
+            ${selHTML(`brand_${id}`, DB.lightBrand, DB.lightBrand[0])}
             <div class="slider-row"><span>W</span><input type="range" id="watt_${id}" min="0" max="2000" value="1000" oninput="triggerUpdate()"></div>
             <div class="slider-row"><span>K</span><input type="range" id="kel_${id}" min="2000" max="10000" value="5600" oninput="triggerUpdate()"></div>
             <div style="font-size:0.6rem; color:#666; margin-top:5px">MODIFIER</div>
-            <select id="lit_mod_${id}" onchange="triggerUpdate()">${DB.lightMod.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${selHTML(`lit_mod_${id}`, DB.lightMod, DB.lightMod[0])}
             <div style="font-size:0.6rem; color:#666; margin-top:5px">COLOR GEL</div>
-            <select id="lit_gel_${id}" onchange="triggerUpdate()">${DB.lightGel.map(o=>`<option>${o}</option>`).join('')}</select>
+            ${selHTML(`lit_gel_${id}`, DB.lightGel, DB.lightGel[0])}
         `;
     } else {
         div.innerHTML = `
@@ -498,14 +585,16 @@ window.updateCamFlavor = function(id) {
     const lensSel = document.getElementById(`lens_${id}`);
     const camFlav = document.getElementById(`cam_flav_${id}`);
     const lensFlav = document.getElementById(`lens_flav_${id}`);
-    if(camSel && camFlav) {
-        const opt = camSel.options[camSel.selectedIndex];
-        camFlav.innerText = "💡 " + opt.getAttribute('data-flavor');
-    }
-    if(lensSel && lensFlav) {
-        const opt = lensSel.options[lensSel.selectedIndex];
-        lensFlav.innerText = "💡 " + opt.getAttribute('data-flavor');
-    }
+    // The unassigned option carries no flavour text — show nothing rather than
+    // the string "null".
+    const flavour = (sel, out) => {
+        if(!sel || !out) return;
+        const opt = sel.options[sel.selectedIndex];
+        const f = opt ? opt.getAttribute('data-flavor') : null;
+        out.innerText = f ? '💡 ' + f : '';
+    };
+    flavour(camSel, camFlav);
+    flavour(lensSel, lensFlav);
 }
 
 // What a node is called when a camera targets it. Single definition — this used
@@ -1258,14 +1347,16 @@ window.duplicateSelected = function() {
 };
 
 // QUICK ADD PALETTE
-const NODE_CATEGORIES = {
-    'Temel': ['render', 'scene', 'style', 'character'],
-    'Özne': [...SUBJECT_TYPES, 'object'],   // grows automatically with the registry
-    'Ortam': ['customloc', 'atmos', 'light'],
-    'Kamera': ['camera', 'shot', 'cammove', 'position'],
-    'Görünüm': ['colorg', 'comp', 'preview'],
-    'Çıktı': ['stack', 'sequence', 'neg']
-};
+// Palette groups come straight from CATEGORIES, so it can never drift from the
+// nav. Registry subjects are folded into `subject` by categoryOf().
+function paletteGroups() {
+    const out = {};
+    for (const key in CATEGORIES) {
+        out[key] = CATEGORIES[key].types.slice();
+    }
+    SUBJECT_TYPES.forEach(t => { if (!out.subject.includes(t)) out.subject.push(t); });
+    return out;
+}
 
 window.openQuickAdd = function() {
     const modal = document.getElementById('quick-add-modal');
@@ -1280,18 +1371,28 @@ window.filterQuickAdd = function(query) {
     const list = document.getElementById('quick-add-list');
     list.innerHTML = '';
     const q = query.toLowerCase();
-    for(let cat in NODE_CATEGORIES) {
-        const nodes = NODE_CATEGORIES[cat];
-        const filtered = nodes.filter(n => n.includes(q) || cat.toLowerCase().includes(q));
-        if(filtered.length === 0) continue;
-        filtered.forEach(type => {
+    const groups = paletteGroups();
+    for(const cat in groups) {
+        const label = CATEGORIES[cat].label;
+        const hits = groups[cat].filter(t => t.includes(q) || label.toLowerCase().includes(q));
+        if(!hits.length) continue;
+
+        const head = document.createElement('div');
+        head.style.cssText = `grid-column:1/-1; font-family:'JetBrains Mono',monospace; font-size:0.5rem;
+            letter-spacing:0.14em; color:var(--cat-${cat}); margin:6px 0 2px;`;
+        head.textContent = label;
+        list.appendChild(head);
+
+        hits.forEach(type => {
             const btn = document.createElement('button');
-            btn.style.cssText = 'background:#111; border:1px solid #333; color:#eee; padding:10px; border-radius:4px; cursor:pointer; font-size:0.75rem; font-weight:bold; min-height:44px; display:flex; align-items:center; justify-content:center; text-align:center;';
+            btn.className = 'palette-btn';
+            btn.setAttribute('data-cat', cat);
+            
             btn.textContent = type.toUpperCase();
             btn.onpointerdown = () => {
                 createNode(type);
                 document.getElementById('quick-add-modal').style.display = 'none';
-                window.showToast(`${type} added`);
+                window.showToast(`${type} eklendi`);
             };
             list.appendChild(btn);
         });
@@ -2038,11 +2139,12 @@ document.addEventListener('keyup', (e) => {
 function buildSubjectNav() {
     const host = document.getElementById('subject-nav');
     if(!host) return;
-    host.innerHTML = SUBJECT_TYPES.map(t => {
-        const d = SUBJECTS[t];
-        return `<button class="nav-btn" style="border-color:${d.nav.color}"
-            onpointerdown="createNode('${t}')">${d.nav.label}</button>`;
-    }).join('');
+    // Subjects share the category colour rather than each carrying its own —
+    // a registry entry's nav.label still names it, but the hue says "subject".
+    host.innerHTML = SUBJECT_TYPES.map(t =>
+        `<button class="nav-btn" data-cat="subject"
+            onpointerdown="createNode('${t}')">${SUBJECTS[t].nav.label}</button>`
+    ).join('');
 }
 
 // Preset dropdown is built from PRESETS, so a new preset needs no HTML edit.

@@ -351,5 +351,138 @@ eq('varyantlar tekrarlanabilir (Math.random yok)',
 set('val_s', 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
 eq('boş promptta varyant yok', buildVariants('s').length, 0);
 
+// ---------------------------------------------------------------------------
+console.log('\n=== Unassigned: alan boşsa cümleden tamamen düşüyor ===');
+
+// The map key must BE the node id — collectInputs looks up nodes[cable.from].
+const un = {
+  s: nodes.s,
+  u_sc: { id: 'u_sc', type: 'scene', el: { style: { left: '0px' } } },
+  u_ch: { id: 'u_ch', type: 'character', el: { style: { left: '1px' } } },
+};
+const unC = [{ from: 'u_sc', to: 's' }, { from: 'u_ch', to: 's' }];
+const scnFields = ['scn_loc', 'scn_cust', 'scn_time', 'scn_wea', 'scn_mood'];
+const chrFields = ['chr_name', 'chr_age', 'chr_bld', 'chr_clo', 'chr_wear', 'chr_hair',
+  'chr_beard', 'chr_feat', 'chr_prop', 'chr_emo', 'chr_mic', 'chr_pos', 'chr_ges',
+  'chr_gait', 'chr_act'];
+const clearAll = () => {
+  scnFields.forEach(f => set(`${f}_u_sc`, ''));
+  chrFields.forEach(f => set(`${f}_u_ch`, ''));
+  ['depth', 'hpos', 'vpos'].forEach(k => set(`${k}_u_ch`, ''));
+};
+
+clearAll();
+set('chr_name_u_ch', 'Ada');
+eq('her şey boş: sadece isim kalıyor, boşluk/virgül artığı yok',
+  stack('s', 'runway', un, unC), 'Ada.');
+
+clearAll();
+set('chr_name_u_ch', 'Ada');
+set('scn_loc_u_sc', 'Exterior: Desert');
+eq('sadece lokasyon: "during"/"under" hiç görünmüyor',
+  stack('s', 'runway', un, unC), 'Ada, set in a desert.');
+
+clearAll();
+set('chr_name_u_ch', 'Ada');
+set('scn_time_u_sc', 'Noon (10:00-14:00)');
+eq('sadece zaman: "set in a" yok',
+  stack('s', 'runway', un, unC), 'Ada, during noon.');
+
+clearAll();
+set('chr_name_u_ch', 'Ada'); set('chr_emo_u_ch', 'Fear');
+set('hpos_u_ch', 'camera_left');
+eq('spatial eksenlerinden biri: sadece o eksen yazılıyor',
+  stack('s', 'runway', un, unC), 'Ada, positioned camera-left, showing expressions of fear.');
+
+clearAll();
+set('chr_name_u_ch', 'Ada'); set('chr_bld_u_ch', 'Skinny');
+eq('yapı var yaş yok: "a skinny" tek başına doğru',
+  stack('s', 'runway', un, unC), 'Ada, a skinny.');
+
+clearAll();
+set('chr_name_u_ch', 'Ada'); set('chr_age_u_ch', 'Child (3-12)');
+eq('yaş var yapı yok', stack('s', 'runway', un, unC), 'Ada, a child.');
+
+console.log('\n=== Unassigned: midjourney tag üretmiyor ===');
+clearAll();
+set('chr_name_u_ch', 'Ada');
+eq('boş alanlar dangling tag bırakmıyor (" mood", "wearing " yok)',
+  stack('s', 'midjourney', un, unC), 'Ada');
+
+console.log('\n=== Unassigned: registry node\'ları ===');
+const unQ = { s: nodes.s, u_q: { id: 'u_q', type: 'quadruped', el: { style: { left: '0px' } } } };
+const unQC = [{ from: 'u_q', to: 's' }];
+SUBJECTS.quadruped.fields.forEach(f => set(`quad_${f.key}_u_q`, ''));
+['depth', 'hpos', 'vpos'].forEach(k => set(`${k}_u_q`, ''));
+set('quad_spec_u_q', 'Wolf');
+eq('sadece tür: "a  wolf" değil "a wolf"',
+  stack('s', 'runway', unQ, unQC), 'a wolf.');
+
+set('quad_size_u_q', 'Large');
+eq('tür + boyut', stack('s', 'runway', unQ, unQC), 'a large wolf.');
+
+set('quad_act_u_q', 'Charging');
+eq('aksiyon eklenince ayrı cümlecik',
+  stack('s', 'runway', unQ, unQC), 'a large wolf, the wolf is charging.');
+
+console.log('\n=== Yeni alanlar: camera / character / style / colorgrade ===');
+const rich = {
+  s: nodes.s,
+  r_c: { id: 'r_c', type: 'character', el: { style: { left: '0px' } } },
+  r_st: { id: 'r_st', type: 'style', el: { style: { left: '1px' } } },
+  r_cg: { id: 'r_cg', type: 'colorg', el: { style: { left: '2px' } } },
+  r_cm: { id: 'r_cm', type: 'camera', el: { style: { left: '3px' } } },
+};
+const richC = ['r_c', 'r_st', 'r_cg', 'r_cm'].map(k => ({ from: k, to: 's' }));
+[...chrFields].forEach(f => set(`${f}_r_c`, ''));
+['depth', 'hpos', 'vpos'].forEach(k => set(`${k}_r_c`, ''));
+set('chr_name_r_c', 'Ada');
+set('chr_hair_r_c', 'Slicked back hair');
+set('chr_beard_r_c', 'Heavy stubble');
+set('chr_feat_r_c', 'Facial scar');
+set('chr_prop_r_c', 'a revolver');
+set('chr_ges_r_c', 'Clenched fists');
+set('chr_gait_r_c', 'Limping');
+['sty_cin', 'sty_per', 'sty_art', 'sty_dir', 'sty_dp', 'sty_pal', 'sty_tex', 'sty_ref']
+  .forEach(f => set(`${f}_r_st`, ''));
+set('sty_dp_r_st', 'Emmanuel Lubezki');
+set('sty_tex_r_st', 'Gritty and grainy');
+set('sty_ref_r_st', 'Blade Runner 2049');
+['col_lut', 'col_stk', 'col_con', 'col_sat', 'col_grain', 'col_halo', 'col_vig']
+  .forEach(f => set(`${f}_r_cg`, ''));
+set('col_con_r_cg', 'Punchy');
+set('col_grain_r_cg', 'Heavy 16mm-style');
+set('col_halo_r_cg', 'Strong halation around highlights');
+['cam_', 'lens_', 'mm_in_', 'cam_fmt_', 'cam_fps_', 'cam_focus_', 'cam_angle_',
+  'cam_ap_', 'cam_iso_', 'cam_fil_', 'cam_sh_', 'cam_adv_act_', 'cam_adv_tgt_', 'cam_adv_dist_']
+  .forEach(f => set(`${f}r_cm`, ''));
+set('cam_fmt_r_cm', 'Large Format');
+set('cam_fps_r_cm', '120 fps (slow motion)');
+set('cam_focus_r_cm', 'Shallow focus');
+set('cam_angle_r_cm', 'Low angle');
+
+const out = stack('s', 'runway', rich, richC);
+eq('character: saç', out.includes('with slicked back hair'), true);
+eq('character: sakal', out.includes('heavy stubble'), true);
+eq('character: ayırt edici özellik', out.includes('facial scar'), true);
+eq('character: taşıdığı eşya', out.includes('holding a revolver'), true);
+set('chr_clo_r_c', 'Formal Suit / Dress'); set('chr_wear_r_c', 'Torn and Dirty');
+eq('character: aşınma giysinin sıfatı ("wearing X, torn" değil)',
+  stack('s', 'runway', rich, richC).includes('wearing torn and dirty formal suit / dress'), true);
+set('chr_clo_r_c', ''); set('chr_wear_r_c', '');
+eq('character: jest + yürüyüş (eskiden prompt\'a hiç girmiyordu)',
+  out.includes('Ada is clenched fists, limping'), true);
+eq('style: görüntü yönetmeni', out.includes('shot by Emmanuel Lubezki'), true);
+eq('style: doku', out.includes('gritty and grainy'), true);
+eq('style: referans', out.includes('in the vein of Blade Runner 2049'), true);
+eq('colorgrade: kontrast', out.includes('punchy contrast'), true);
+eq('colorgrade: grain', out.includes('heavy 16mm-style grain'), true);
+eq('colorgrade: halation', out.includes('strong halation around highlights'), true);
+eq('camera: format', out.includes('Large Format format'), true);
+eq('camera: frame rate', out.includes('120 fps (slow motion)'), true);
+eq('camera: odak', out.includes('shallow focus'), true);
+eq('camera: açı', out.includes('low angle angle'), true);
+eq('atanmamış gövde/lens "Shot on" üretmiyor', out.includes('Shot on'), false);
+
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);
