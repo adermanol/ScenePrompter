@@ -1,60 +1,185 @@
+// Locks the exact prompt text updateStack() produces, per platform.
+// These are behaviour snapshots: if a refactor changes the wording, that is a
+// deliberate decision and the expected string here must be updated with it.
 const fs = require('fs');
 
-// ---- Fake DOM ----
 const els = {};
-function mk(value) { return { value, style: {}, options: [{ text: value }], selectedIndex: 0 }; }
-function set(id, value) { els[id] = mk(value); }
+const mk = v => ({ value: v, style: {}, options: [{ text: v }], selectedIndex: 0 });
+const set = (id, v) => { els[id] = mk(v); };
 
-global.document = {
-  getElementById: (id) => els[id] || null,
-};
+global.document = { getElementById: id => els[id] || null };
 global.window = {};
 global.localStorage = { getItem: () => null, setItem: () => {} };
 
-// ---- Load promptEngine.js into this scope ----
-const code = fs.readFileSync('c:/Works/Projects/ScenePrompter/js/promptEngine.js', 'utf8');
-eval(code); // defines updateStack, formatSpatial, etc. as vars in this scope
+// subjects.js defines the SUBJECTS registry that updateStack() reads from.
+// Function declarations leak out of a direct eval, but `const` bindings do not —
+// hence the explicit re-export of the const-declared registry and data tables.
+const SRC = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js']
+  .map(f => fs.readFileSync('c:/Works/Projects/ScenePrompter/' + f, 'utf8'))
+  .join('\n;\n');
+eval(SRC + '\n;globalThis.SUBJECTS = SUBJECTS;'
+         + '\n;globalThis.SUBJECT_TYPES = SUBJECT_TYPES;'
+         + '\n;globalThis.DB = DB;');
 
-// ---- Scenario ----
-const nodes = {
-  node_s: { id: 'node_s', type: 'stack', el: { style: { left: '0px' } } },
-  node_q: { id: 'node_q', type: 'quadruped', el: { style: { left: '10px' } } },
-  node_i: { id: 'node_i', type: 'insect', el: { style: { left: '20px' } } },
-  node_l: { id: 'node_l', type: 'customloc', el: { style: { left: '30px' } } },
-};
-const cables = [
-  { from: 'node_q', to: 'node_s' },
-  { from: 'node_i', to: 'node_s' },
-  { from: 'node_l', to: 'node_s' },
-];
-
-// stack + spatial
-set('val_node_s', '');
-// spatial context for creatures
-['node_q', 'node_i'].forEach(id => {
-  set(`depth_${id}`, 'foreground'); set(`hpos_${id}`, 'center'); set(`vpos_${id}`, 'ground');
-});
-
-// quadruped
-set('quad_cust_node_q', ''); set('quad_spec_node_q', 'Wolf'); set('quad_size_node_q', 'Large');
-set('quad_coat_node_q', 'Shaggy / Thick Fur'); set('quad_act_node_q', 'Prowling / Stalking');
-set('quad_mood_node_q', 'Feral / Wild'); set('quad_note_node_q', '');
-
-// insect
-set('ins_cust_node_i', ''); set('ins_spec_node_i', 'Butterfly'); set('ins_scale_node_i', 'Extreme Macro Close-up');
-set('ins_count_node_i', 'Swarm'); set('ins_beh_node_i', 'Flying'); set('ins_surf_node_i', 'On a Flower');
-set('ins_note_node_i', '');
-
-// customloc
-set('loc_name_node_l', 'rusted freighter deck'); set('loc_env_node_l', 'Exterior');
-set('loc_arch_node_l', 'Industrial / Factory'); set('loc_surf_node_l', 'Wet Asphalt');
-set('loc_scale_node_l', 'Vast / Cavernous'); set('loc_feat_node_l', 'hanging cables, flickering lights');
-
-function run(platform) {
-  set('stack_plat_node_s', platform);
-  set('val_node_s', '');
-  updateStack('node_s', nodes, cables);
-  console.log(`\n===== ${platform.toUpperCase()} =====\n` + els['val_node_s'].value);
+let failures = 0;
+function eq(label, actual, expected) {
+  const ok = typeof actual === 'string' && typeof expected === 'string'
+    ? actual === expected
+    : JSON.stringify(actual) === JSON.stringify(expected);
+  if (!ok) failures++;
+  console.log(`${ok ? '  PASS' : '  FAIL'}  ${label}`);
+  if (!ok) console.log(`        beklenen: ${JSON.stringify(expected)}\n        gelen   : ${JSON.stringify(actual)}`);
 }
 
-['runway', 'veo', 'kling', 'luma', 'midjourney'].forEach(run);
+function stack(id, platform, nodes, cables) {
+  set(`stack_plat_${id}`, platform);
+  set(`val_${id}`, '');
+  updateStack(id, nodes, cables);
+  return els[`val_${id}`].value;
+}
+
+const spatial = (id, d = 'foreground', h = 'center', v = 'ground') => {
+  set(`depth_${id}`, d); set(`hpos_${id}`, h); set(`vpos_${id}`, v);
+};
+
+// ---------------------------------------------------------------------------
+console.log('\n=== Quadruped + Insect + Custom Location ===');
+
+const nodes = {
+  s: { id: 's', type: 'stack', el: { style: { left: '0px' } } },
+  q: { id: 'q', type: 'quadruped', el: { style: { left: '1px' } } },
+  i: { id: 'i', type: 'insect', el: { style: { left: '2px' } } },
+  l: { id: 'l', type: 'customloc', el: { style: { left: '3px' } } },
+};
+const cables = [{ from: 'q', to: 's' }, { from: 'i', to: 's' }, { from: 'l', to: 's' }];
+
+spatial('q'); spatial('i');
+set('quad_cust_q', ''); set('quad_spec_q', 'Wolf'); set('quad_size_q', 'Large');
+set('quad_coat_q', 'Shaggy / Thick Fur'); set('quad_act_q', 'Prowling / Stalking');
+set('quad_mood_q', 'Feral / Wild'); set('quad_note_q', '');
+set('ins_cust_i', ''); set('ins_spec_i', 'Butterfly'); set('ins_scale_i', 'Extreme Macro Close-up');
+set('ins_count_i', 'Swarm'); set('ins_beh_i', 'Flying'); set('ins_surf_i', 'On a Flower'); set('ins_note_i', '');
+set('loc_name_l', 'rusted freighter deck'); set('loc_env_l', 'Exterior');
+set('loc_arch_l', 'Industrial / Factory'); set('loc_surf_l', 'Wet Asphalt');
+set('loc_scale_l', 'Vast / Cavernous'); set('loc_feat_l', 'hanging cables, flickering lights');
+
+const SUBJ = 'a large feral wolf with shaggy, thick fur, positioned in the foreground, in the center, at ground level'
+  + ' and a swarm of butterflies on a flower, positioned in the foreground, in the center, at ground level,'
+  + ' shot in extreme macro detail';
+const ACT = 'the wolf is prowling while the butterflies are flying';
+const ENV = 'set in a vast, industrial rusted freighter deck with wet asphalt ground,'
+  + ' featuring hanging cables, flickering lights';
+
+eq('runway', stack('s', 'runway', nodes, cables), `${SUBJ}, ${ACT}, ${ENV}.`);
+eq('veo', stack('s', 'veo', nodes, cables),
+  `${ENV.charAt(0).toUpperCase() + ENV.slice(1)}. ${SUBJ}. ${ACT}. Audio: buzzing insect wings.`);
+eq('kling', stack('s', 'kling', nodes, cables),
+  `${SUBJ} ${ACT}. The setting is ${ENV.replace('set in a', 'a')}. Soundtrack: buzzing insect wings.`);
+eq('luma', stack('s', 'luma', nodes, cables),
+  `Dynamic cinematic sequence of ${SUBJ} ${ACT}. Environment is ${ENV.replace('set in a', 'a')}.`);
+eq('midjourney', stack('s', 'midjourney', nodes, cables),
+  'rusted freighter deck, Exterior, Industrial / Factory, Wet Asphalt ground, Vast scale,'
+  + ' hanging cables, flickering lights, Large Wolf, Shaggy / Thick Fur, Prowling / Stalking, Feral,'
+  + ' Swarm of Butterflies, Flying, On a Flower, extreme macro photography');
+
+// ---------------------------------------------------------------------------
+console.log('\n=== Pluralization / sayı ifadeleri ===');
+
+const n2 = { s: nodes.s, i: nodes.i };
+const c2 = [{ from: 'i', to: 's' }];
+
+set('ins_spec_i', 'Praying Mantis'); set('ins_count_i', 'Single Specimen');
+set('ins_beh_i', 'Still / Camouflaged'); set('ins_surf_i', 'On a Leaf');
+set('ins_scale_i', 'Life-size Detail');
+eq('tekil: "a single praying mantis"', stack('s', 'runway', n2, c2),
+  'a single praying mantis on a leaf, positioned in the foreground, in the center, at ground level,'
+  + ' the praying mantis is still / camouflaged.');
+
+set('ins_spec_i', 'Firefly'); set('ins_count_i', 'A Few'); set('ins_beh_i', 'Hovering');
+set('ins_surf_i', 'In Mid-air Flight');
+eq('"a few fireflies" ("a a few" değil) + çoğul fiil', stack('s', 'runway', n2, c2),
+  'a few fireflies in mid-air flight, positioned in the foreground, in the center, at ground level,'
+  + ' the fireflies are hovering.');
+
+set('ins_count_i', 'Massive Infestation'); set('ins_spec_i', 'Cockroach');
+eq('"a massive infestation of cockroaches"', stack('s', 'runway', n2, c2).split(' in mid-air')[0],
+  'a massive infestation of cockroaches');
+
+console.log('\n=== pluralize() birim ===');
+eq('Butterfly -> Butterflies', pluralize('Butterfly'), 'Butterflies');
+eq('Praying Mantis -> Praying Mantises', pluralize('Praying Mantis'), 'Praying Mantises');
+eq('Ant -> Ants', pluralize('Ant'), 'Ants');
+eq('Firefly -> Fireflies', pluralize('Firefly'), 'Fireflies');
+
+// ---------------------------------------------------------------------------
+console.log('\n=== Custom Location: sahne ile birlikte / minimal alanlar ===');
+
+const n3 = { s: nodes.s, sc: { id: 'sc', type: 'scene', el: { style: { left: '0px' } } }, l: nodes.l };
+const c3 = [{ from: 'sc', to: 's' }, { from: 'l', to: 's' }];
+set('scn_loc_sc', 'Interior: Living Room'); set('scn_cust_sc', '');
+set('scn_time_sc', 'Noon (10:00-14:00)'); set('scn_wea_sc', 'Clear'); set('scn_mood_sc', 'Peaceful');
+set('loc_name_l', ''); set('loc_env_l', 'Interior'); set('loc_arch_l', 'Undefined');
+set('loc_surf_l', 'Undefined'); set('loc_scale_l', 'Intimate'); set('loc_feat_l', '');
+eq('sahne varsa location "set within" ile ekleniyor; Undefined alanlar atlanıyor',
+  stack('s', 'runway', n3, c3),
+  'set in a living room during noon, set within a intimate interior space,'
+  + ' The overall mood is peaceful..');
+
+// ---------------------------------------------------------------------------
+console.log('\n=== Registry: yeni özne node\'ları ===');
+
+// One helper drives any registry node: fill its fields, wire it to a stack, read
+// the prompt. Adding a subject to SUBJECTS makes it testable with zero new code.
+function subjectPrompt(type, values, platform = 'runway') {
+  const def = SUBJECTS[type];
+  const nid = 'x';
+  spatial(nid, 'midground', 'camera_left', 'eye_level');
+  def.fields.forEach(f => set(`${def.prefix}_${f.key}_${nid}`, values[f.key] ?? ''));
+  const nn = { s: nodes.s, x: { id: nid, type, el: { style: { left: '1px' } } } };
+  return stack('s', platform, nn, [{ from: nid, to: 's' }]);
+}
+const SP = 'in the middle ground, camera-left, at eye level';
+
+eq('flying: tekil kuş', subjectPrompt('flying', {
+  spec: 'Eagle', count: 'Single', alt: 'High Sky', act: 'Soaring',
+}), `a lone eagle high sky, positioned ${SP}, the eagle is soaring.`);
+
+// NOTE: veo only capitalises compEnv, so with no scene/location node the line
+// opens lowercase. Pre-existing behaviour for every node type — tracked with the
+// other grammar nits (a/an, trailing "..") for Faz 0.
+eq('flying: sürü çoğul + ses', subjectPrompt('flying', {
+  spec: 'Crow', count: 'Large Flock', alt: 'Treetop', act: 'Flapping Frantically',
+}, 'veo'), `a large flock of crows treetop, positioned ${SP}.`
+  + ' the crows are flapping frantically. Audio: beating wings, a chorus of distant calls.');
+
+eq('vehicle: durum + dönem + ses', subjectPrompt('vehicle', {
+  spec: 'Car', cust: '1969 Mustang', era: 'Vintage / Classic', cond: 'Rusted', act: 'Speeding',
+}, 'veo'), `a rusted vintage 1969 mustang, positioned ${SP}.`
+  + ` the 1969 mustang is speeding. Audio: a roaring engine.`);
+
+eq('crowd: yoğunluk + davranış', subjectPrompt('crowd', {
+  dens: 'Packed', beh: 'Protesting', attire: 'Modern Casual',
+}), `a packed crowd in modern casual, positioned ${SP}, the crowd is protesting.`);
+
+eq('aquatic: sürü + su', subjectPrompt('aquatic', {
+  spec: 'Dolphin', count: 'School', water: 'Sunlit Blue', act: 'Breaching',
+}), `a school of dolphins in sunlit blue water, positioned ${SP}, the dolphins are breaching.`);
+
+eq('aquatic: midjourney tag', subjectPrompt('aquatic', {
+  spec: 'Shark', count: 'Single', water: 'Deep Dark', act: 'Hunting',
+}, 'midjourney'), 'Shark, Hunting, Deep Dark water');
+
+console.log('\n=== Registry bütünlüğü ===');
+SUBJECT_TYPES.forEach(t => {
+  const def = SUBJECTS[t];
+  const missing = ['title', 'nav', 'prefix', 'fields', 'name', 'label', 'phrase', 'action', 'mesh']
+    .filter(k => !def[k]);
+  eq(`${t}: zorunlu alanlar tam`, missing, []);
+  const badOpts = def.fields.filter(f => f.type === 'select' && !DB[f.options]).map(f => f.options);
+  eq(`${t}: select alanları DB'de var`, badOpts, []);
+});
+eq('prefix çakışması yok', SUBJECT_TYPES.length,
+  new Set(SUBJECT_TYPES.map(t => SUBJECTS[t].prefix)).size);
+
+console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
+process.exit(failures === 0 ? 0 : 1);

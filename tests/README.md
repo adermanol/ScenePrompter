@@ -28,14 +28,27 @@ Yakaladığı regresyonlar:
 - `captureState()` mutasyondan *sonra* çağrılıyordu → undo tamamen no-op'tu
 - `saveWorkspace()` undo geçmişini siliyordu
 
+Ayrıca her `SUBJECTS` kaydının gerçekten mount olduğunu, alanlarının doğru id ile
+DOM'a geldiğini ve save/load turunu sağlam atlattığını doğrular — bayat bir
+eleman id'si tam olarak burada patlar.
+
 ## promptEngine.test.js
 
-`updateStack()` çıktısını 5 platform için (Runway, Veo, Kling, Luma, Midjourney)
-sahte DOM ile üretir ve yazdırır. Şu an **çıktıyı basar, assert etmez** — göz
-kontrolü içindir. Faz 3'te snapshot assert'lerine çevrilecek.
+`updateStack()` çıktısının **birebir metnini** 5 platform için (Runway, Veo,
+Kling, Luma, Midjourney) kilitler. Refactor kelimeyi değiştirirse test kırılır;
+değişiklik kasıtlıysa beklenen string de onunla güncellenir.
+
+Bu snapshot'lar `subjects.js` registry refactor'ünün eşdeğerliğini kanıtladı:
+elle yazılmış quadruped/insect kodu kaldırıldı, çıktı harfi harfine aynı kaldı.
+
+Registry bütünlük testleri de burada: her kaydın zorunlu alanları, `select`
+alanlarının `DB`'de gerçekten var olması, ve prefix çakışması olmaması.
 
 ## Notlar
 
 - `loadPreset()` kablolarını `setTimeout(50)` içinde kurar; testlerde
   `await preset()` bunu bekler.
-- jsdom'da `THREE` yok, `preview` node'u 3D kurmaz — test kapsamı dışı.
+- jsdom'da `THREE` yok, `preview` node'u 3D kurmaz — mesh fonksiyonları test
+  kapsamı dışı (sadece varlıkları kontrol edilir).
+- `eval` içindeki `const` bağlantıları dışarı sızmaz; testler `SUBJECTS`, `DB` ve
+  `SUBJECT_TYPES`'ı eval sonrası açıkça dışa aktarır. Fonksiyon bildirimleri sızar.

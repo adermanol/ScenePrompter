@@ -50,18 +50,18 @@ function updateStack(sid, nodes, cables) {
     
     let sceneObj = null, styleObj = null, charObjs = [], objectObjs = [], lightObjs = [], camObj = null, renderObj = null;
     let shotObj = null, moveObj = null, atmosObj = null, colorObj = null, compObj = null, negObj = null;
-    let quadObjs = [], insectObjs = [], customLocObj = null;
+    let subjectObjs = [], customLocObj = null;
 
     inputs.forEach(c => {
         const n = nodes[c.from];
         if(!n) return;
+        // Anything defined in the SUBJECTS registry is scene content.
+        if (SUBJECTS[n.type]) { subjectObjs.push(n); return; }
         switch(n.type) {
             case 'scene': sceneObj = n; break;
             case 'style': styleObj = n; break;
             case 'character': charObjs.push(n); break;
             case 'object': objectObjs.push(n); break;
-            case 'quadruped': quadObjs.push(n); break;
-            case 'insect': insectObjs.push(n); break;
             case 'customloc': customLocObj = n; break;
             case 'light': lightObjs.push(n); break;
             case 'camera': camObj = n; break;
@@ -156,42 +156,14 @@ function updateStack(sid, nodes, cables) {
                 }
             });
 
-            quadObjs.forEach(q => {
-                const id = q.id;
-                const spec = (document.getElementById(`quad_cust_${id}`).value || document.getElementById(`quad_spec_${id}`).value || 'animal').toLowerCase();
-                const size = document.getElementById(`quad_size_${id}`).value.toLowerCase();
-                const coat = document.getElementById(`quad_coat_${id}`).value.replace(' / ', ', ').toLowerCase();
-                const act = document.getElementById(`quad_act_${id}`).value.split(' / ')[0].toLowerCase();
-                const mood = document.getElementById(`quad_mood_${id}`).value.split(' / ')[0].toLowerCase();
-                const note = document.getElementById(`quad_note_${id}`).value.trim();
-
-                let s = `a ${size} ${mood} ${spec} with ${coat}, positioned ${formatSpatial(id)}`;
-                if (note) s += `, ${note}`;
-                sArr.push(s);
-                aArr.push(`the ${spec} is ${act}`);
-
-                if (act.includes('gallop') || act.includes('charg')) compAudio += "thundering hoofbeats, ";
-                if (act.includes('snarl') || act.includes('fight')) compAudio += "aggressive growling, ";
-            });
-
-            insectObjs.forEach(ins => {
-                const id = ins.id;
-                const spec = (document.getElementById(`ins_cust_${id}`).value || document.getElementById(`ins_spec_${id}`).value || 'insect').toLowerCase();
-                const scaleV = document.getElementById(`ins_scale_${id}`).value.toLowerCase();
-                const count = document.getElementById(`ins_count_${id}`).value.toLowerCase();
-                const beh = document.getElementById(`ins_beh_${id}`).value.toLowerCase();
-                const surf = document.getElementById(`ins_surf_${id}`).value.toLowerCase();
-                const note = document.getElementById(`ins_note_${id}`).value.trim();
-
-                const many = /swarm|cluster|infestation|few/.test(count);
-                const noun = insectNoun(count, spec);
-                let s = `${noun} ${surf}, positioned ${formatSpatial(id)}`;
-                if (scaleV.includes('macro')) s += `, shot in extreme macro detail`;
-                if (note) s += `, ${note}`;
-                sArr.push(s);
-                aArr.push(`${many ? 'the ' + pluralize(spec) + ' are' : 'the ' + spec + ' is'} ${beh}`);
-
-                if (beh.includes('swarm') || beh.includes('fly') || beh.includes('hover')) compAudio += "buzzing insect wings, ";
+            // Every registry subject contributes the same three things.
+            subjectObjs.forEach(sn => {
+                const def = SUBJECTS[sn.type];
+                const v = readSubject(sn.type, sn.id);
+                sArr.push(def.phrase(v, formatSpatial(sn.id)));
+                const act = def.action(v);
+                if (act) aArr.push(act);
+                (def.audio ? def.audio(v) : []).forEach(a => { compAudio += a + ", "; });
             });
 
             if (objectObjs.length > 0) {
@@ -366,27 +338,10 @@ function updateStack(sid, nodes, cables) {
             if (feat) tags.push(feat);
         }
 
-        quadObjs.forEach(q => {
-            const id = q.id;
-            const spec = document.getElementById(`quad_cust_${id}`).value || document.getElementById(`quad_spec_${id}`).value;
-            tags.push(document.getElementById(`quad_size_${id}`).value + " " + spec);
-            tags.push(document.getElementById(`quad_coat_${id}`).value);
-            tags.push(document.getElementById(`quad_act_${id}`).value);
-            tags.push(document.getElementById(`quad_mood_${id}`).value.split(' / ')[0]);
-            const note = document.getElementById(`quad_note_${id}`).value.trim();
-            if (note) tags.push(note);
-        });
-
-        insectObjs.forEach(ins => {
-            const id = ins.id;
-            const spec = document.getElementById(`ins_cust_${id}`).value || document.getElementById(`ins_spec_${id}`).value;
-            const count = document.getElementById(`ins_count_${id}`).value;
-            tags.push(count === 'Single Specimen' ? spec : (count === 'A Few' ? `a few ${pluralize(spec)}` : `${count} of ${pluralize(spec)}`));
-            tags.push(document.getElementById(`ins_beh_${id}`).value);
-            tags.push(document.getElementById(`ins_surf_${id}`).value);
-            if (document.getElementById(`ins_scale_${id}`).value.includes('Macro')) tags.push("extreme macro photography");
-            const note = document.getElementById(`ins_note_${id}`).value.trim();
-            if (note) tags.push(note);
+        subjectObjs.forEach(sn => {
+            const def = SUBJECTS[sn.type];
+            const v = readSubject(sn.type, sn.id);
+            (def.tags ? def.tags(v) : []).forEach(t => tags.push(t));
         });
 
         objectObjs.forEach(o => {

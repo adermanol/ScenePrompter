@@ -1,5 +1,10 @@
 const fs = require('fs');
-const { JSDOM } = require('jsdom');
+const { JSDOM, VirtualConsole } = require('jsdom');
+
+// saveWorkspace() triggers a blob download via a.click(); jsdom cannot navigate
+// and logs a noisy stack for it. Drop jsdom's own errors, keep page console.
+const vc = new VirtualConsole();
+vc.sendTo(console, { omitJSDOMErrors: true });
 
 const ROOT = 'c:/Works/Projects/ScenePrompter';
 const html = fs.readFileSync(`${ROOT}/index.html`, 'utf8');
@@ -8,6 +13,7 @@ const dom = new JSDOM(html, {
   runScripts: 'outside-only',
   pretendToBeVisual: true,
   url: 'http://localhost/',   // localStorage needs a real origin
+  virtualConsole: vc,
 });
 const { window } = dom;
 
@@ -18,9 +24,13 @@ window.localStorage.clear();
 
 // One eval so the files share scope, exactly like real <script> tags do
 // (db.js declares `const DB` at top level — separate evals would hide it).
-const src = ['js/db.js', 'js/promptEngine.js', 'js/app.js']
+const src = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js', 'js/app.js']
   .map(f => fs.readFileSync(`${ROOT}/${f}`, 'utf8')).join('\n;\n');
-window.eval(src);
+// `const` bindings live in the global lexical scope, not on `window` — re-export
+// the ones the tests need to reach.
+window.eval(src + '\n;window.SUBJECTS = SUBJECTS;'
+                + '\n;window.SUBJECT_TYPES = SUBJECT_TYPES;'
+                + '\n;window.serializeWorkspace = serializeWorkspace;');
 
 const doc = window.document;
 const svg = doc.getElementById('svg-layer');
@@ -132,6 +142,44 @@ async function main() {
   window.URL.revokeObjectURL = () => {};
   window.saveWorkspace();
   check('save sonrası geçmiş duruyor  <-- save geçmişi siliyordu', window.undoStack.length, histBefore);
+
+  console.log('\n=== 11. Registry node\'ları gerçekten kuruluyor mu ===');
+  await preset();
+  // Drive every registry type through the real createNode path: the node must
+  // mount, expose every field by its declared id, and survive a save/load round
+  // trip (which is what a stale element id would break).
+  const types = window.SUBJECT_TYPES || Object.keys(window.SUBJECTS || {});
+  check('registry 6 özne node tanımlıyor', types.length, 6);
+  types.forEach(t => {
+    window.createNode(t);
+    const nid = 'node_' + window.nodeIdCounter;
+    const def = window.SUBJECTS[t];
+    const el = doc.getElementById(nid);
+    check(`${t}: node DOM'a eklendi`, !!el, true);
+    const missing = def.fields
+      .filter(f => !doc.getElementById(`${def.prefix}_${f.key}_${nid}`))
+      .map(f => f.key);
+    check(`${t}: tüm alanlar doğru id ile var`, missing, []);
+    check(`${t}: spatial context var`, !!doc.getElementById(`depth_${nid}`), true);
+    check(`${t}: stack'e bağlanabiliyor`,
+      (window.createCable(nid, 'node_5'), window.cables.some(c => c.from === nid)), true);
+  });
+
+  console.log('\n=== 12. Registry node save/load round trip ===');
+  const before12 = window.SUBJECT_TYPES.map(t => {
+    const def = window.SUBJECTS[t];
+    const nid = Object.keys(window.nodes).find(k => window.nodes[k].type === t);
+    return doc.getElementById(`${def.prefix}_${def.fields[0].key}_${nid}`).value;
+  });
+  const saved = JSON.stringify(window.serializeWorkspace ? window.serializeWorkspace() : null);
+  check('workspace serialize edilebiliyor', saved !== 'null', true);
+  window.loadWorkspaceData(saved);
+  const after12 = window.SUBJECT_TYPES.map(t => {
+    const def = window.SUBJECTS[t];
+    const nid = Object.keys(window.nodes).find(k => window.nodes[k].type === t);
+    return nid ? doc.getElementById(`${def.prefix}_${def.fields[0].key}_${nid}`)?.value : null;
+  });
+  check('load sonrası tüm özne node alanları korundu', after12, before12);
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);

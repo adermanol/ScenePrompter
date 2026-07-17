@@ -356,41 +356,11 @@ window.createNode = function(type) {
         hasIn = false; title = "OBJECT";
         content = `<input type="text" class="obj-input" id="val_${id}" placeholder="OBJECT NAME" oninput="triggerUpdate()">${getSpatialContextHTML(id)}`;
     }
-    else if (type === 'quadruped') {
-        hasIn = false; hasOut = true; title = "QUADRUPED";
-        content = `
-            <div style="font-size:0.6rem; color:#666">SPECIES</div>
-            <select id="quad_spec_${id}" onchange="triggerUpdate()">${DB.quadSpecies.map(o=>`<option>${o}</option>`).join('')}</select>
-            <input type="text" class="obj-input" id="quad_cust_${id}" placeholder="Custom breed / name (optional)" oninput="triggerUpdate()" style="margin-top:5px">
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">SIZE</div><select id="quad_size_${id}" onchange="triggerUpdate()">${DB.quadSize.map(o=>`<option ${o==='Medium'?'selected':''}>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">COAT</div><select id="quad_coat_${id}" onchange="triggerUpdate()">${DB.quadCoat.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">ACTION</div>
-            <select id="quad_act_${id}" onchange="triggerUpdate()">${DB.quadAction.map(o=>`<option>${o}</option>`).join('')}</select>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">TEMPERAMENT</div>
-            <select id="quad_mood_${id}" onchange="triggerUpdate()">${DB.quadMood.map(o=>`<option>${o}</option>`).join('')}</select>
-            <input type="text" class="obj-input" id="quad_note_${id}" placeholder="Custom notes" oninput="triggerUpdate()" style="margin-top:5px">
-            ${getSpatialContextHTML(id)}
-        `;
-    }
-    else if (type === 'insect') {
-        hasIn = false; hasOut = true; title = "INSECT";
-        content = `
-            <div style="font-size:0.6rem; color:#666">SPECIES</div>
-            <select id="ins_spec_${id}" onchange="triggerUpdate()">${DB.insectSpecies.map(o=>`<option>${o}</option>`).join('')}</select>
-            <input type="text" class="obj-input" id="ins_cust_${id}" placeholder="Custom species (optional)" oninput="triggerUpdate()" style="margin-top:5px">
-            <div style="display:flex; gap:5px; margin-top:5px">
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">SCALE</div><select id="ins_scale_${id}" onchange="triggerUpdate()">${DB.insectScale.map(o=>`<option>${o}</option>`).join('')}</select></div>
-                <div style="flex:1"><div style="font-size:0.6rem; color:#666">COUNT</div><select id="ins_count_${id}" onchange="triggerUpdate()">${DB.insectCount.map(o=>`<option>${o}</option>`).join('')}</select></div>
-            </div>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">BEHAVIOR</div>
-            <select id="ins_beh_${id}" onchange="triggerUpdate()">${DB.insectBehavior.map(o=>`<option>${o}</option>`).join('')}</select>
-            <div style="font-size:0.6rem; color:#666; margin-top:5px">ON SURFACE</div>
-            <select id="ins_surf_${id}" onchange="triggerUpdate()">${DB.insectSurface.map(o=>`<option>${o}</option>`).join('')}</select>
-            <input type="text" class="obj-input" id="ins_note_${id}" placeholder="Custom notes" oninput="triggerUpdate()" style="margin-top:5px">
-            ${getSpatialContextHTML(id)}
-        `;
+    else if (SUBJECTS[type]) {
+        // Animals, insects, birds, vehicles, crowds — all built from js/subjects.js
+        hasIn = false; hasOut = true;
+        title = SUBJECTS[type].title;
+        content = buildSubjectHTML(type, id);
     }
     else if (type === 'customloc') {
         hasIn = false; hasOut = true; title = "CUSTOM LOCATION";
@@ -519,16 +489,22 @@ window.updateCamFlavor = function(id) {
     }
 }
 
+// What a node is called when a camera targets it. Single definition — this used
+// to be duplicated in triggerUpdate() and again in the 3D preview, and the two
+// drifted apart every time a node type was added.
+function nodeDisplayName(n) {
+    if (SUBJECTS[n.type]) return SUBJECTS[n.type].name(readSubject(n.type, n.id));
+    if (n.type === 'character') return document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
+    if (n.type === 'object') return document.getElementById(`val_${n.id}`)?.value || 'Object';
+    if (n.type === 'light') return 'Light';
+    if (n.type === 'camera') return 'Camera';
+    return '';
+}
+
 window.triggerUpdate = function() {
     let targets = [];
     Object.values(window.nodes).forEach(n => {
-        let name = '';
-        if (n.type === 'character') name = document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
-        else if (n.type === 'object') name = document.getElementById(`val_${n.id}`)?.value || 'Object';
-        else if (n.type === 'quadruped') name = document.getElementById(`quad_cust_${n.id}`)?.value || document.getElementById(`quad_spec_${n.id}`)?.value || 'Animal';
-        else if (n.type === 'insect') name = document.getElementById(`ins_cust_${n.id}`)?.value || document.getElementById(`ins_spec_${n.id}`)?.value || 'Insect';
-        else if (n.type === 'light') name = 'Light';
-        else if (n.type === 'camera') name = 'Camera';
+        const name = nodeDisplayName(n);
 
         if (name) {
             targets.push({ id: n.id, name: `${name} (${n.id.substring(0,4)})`, rawName: name });
@@ -729,8 +705,9 @@ function cabMove(e) {
 function isValidConnection(srcType, dstType) {
     if (dstType === 'sequence') return srcType === 'stack';
     if (dstType === 'stack') return srcType !== 'position' && srcType !== 'sequence';
-    if (dstType === 'preview') return ['position', 'character', 'object', 'quadruped', 'insect', 'customloc', 'light', 'stack'].includes(srcType);
-    if (dstType === 'position') return ['character', 'object', 'quadruped', 'insect', 'light', 'camera'].includes(srcType);
+    // Subject nodes are scene contents: they can all be previewed and positioned.
+    if (dstType === 'preview') return ['position', 'character', 'object', 'customloc', 'light', 'stack'].includes(srcType) || !!SUBJECTS[srcType];
+    if (dstType === 'position') return ['character', 'object', 'light', 'camera'].includes(srcType) || !!SUBJECTS[srcType];
     return false;
 }
 
@@ -1134,7 +1111,7 @@ window.duplicateSelected = function() {
 // QUICK ADD PALETTE
 const NODE_CATEGORIES = {
     'Temel': ['render', 'scene', 'style', 'character'],
-    'Özne': ['quadruped', 'insect', 'object'],
+    'Özne': [...SUBJECT_TYPES, 'object'],   // grows automatically with the registry
     'Ortam': ['customloc', 'atmos', 'light'],
     'Kamera': ['camera', 'shot', 'cammove', 'position'],
     'Görünüm': ['colorg', 'comp', 'preview'],
@@ -1343,17 +1320,8 @@ window.updateThreePreview = function(pid) {
                 
                 let tgtNode = null;
                 for (let nid in window.nodes) {
-                    let n = window.nodes[nid];
-                    let name = '';
-                    if (n.type === 'character') name = document.getElementById(`chr_name_${n.id}`)?.value || 'Character';
-                    else if (n.type === 'object') name = document.getElementById(`val_${n.id}`)?.value || 'Object';
-                    else if (n.type === 'quadruped') name = document.getElementById(`quad_cust_${n.id}`)?.value || document.getElementById(`quad_spec_${n.id}`)?.value || 'Animal';
-                    else if (n.type === 'insect') name = document.getElementById(`ins_cust_${n.id}`)?.value || document.getElementById(`ins_spec_${n.id}`)?.value || 'Insect';
-                    else if (n.type === 'light') name = 'Light';
-                    else if (n.type === 'camera') name = 'Camera';
-                    if (name === advTgt && n.id !== node.id) {
-                        tgtNode = n; break;
-                    }
+                    const n = window.nodes[nid];
+                    if (n.id !== node.id && nodeDisplayName(n) === advTgt) { tgtNode = n; break; }
                 }
                 
                 if (tgtNode) {
@@ -1379,13 +1347,8 @@ window.updateThreePreview = function(pid) {
             }
         } else if (node.type === 'object') {
             labelText = document.getElementById(`val_${node.id}`)?.value || 'OBJECT';
-        } else if (node.type === 'quadruped') {
-            const spec = document.getElementById(`quad_cust_${node.id}`)?.value || document.getElementById(`quad_spec_${node.id}`)?.value || 'ANIMAL';
-            labelText = "🐾 " + spec;
-        } else if (node.type === 'insect') {
-            const spec = document.getElementById(`ins_cust_${node.id}`)?.value || document.getElementById(`ins_spec_${node.id}`)?.value || 'INSECT';
-            const cnt = document.getElementById(`ins_count_${node.id}`)?.value || '';
-            labelText = "🐞 " + spec + (cnt && cnt !== 'Single Specimen' ? ` (${cnt})` : '');
+        } else if (SUBJECTS[node.type]) {
+            labelText = SUBJECTS[node.type].label(readSubject(node.type, node.id));
         } else if (node.type === 'customloc') {
             labelText = "📍 " + (document.getElementById(`loc_name_${node.id}`)?.value || 'LOCATION');
         }
@@ -1430,72 +1393,13 @@ window.updateThreePreview = function(pid) {
             preview.scene.add(mesh);
             preview.objects.push(mesh);
         }
-        else if (node.type === 'quadruped') {
-            const sizeMap = { 'Tiny': 0.4, 'Small': 0.7, 'Medium': 1.0, 'Large': 1.5, 'Massive': 2.3 };
-            const moodColor = {
-                'Aggressive': 0xaa3322, 'Feral / Wild': 0x774422, 'Majestic / Regal': 0xccaa44,
-                'Wounded': 0x662222, 'Fearful / Skittish': 0x8899aa, 'Playful': 0xcc8855,
-                'Calm': 0x997755, 'Loyal / Docile': 0x886644
-            };
-            const size = sizeMap[document.getElementById(`quad_size_${node.id}`)?.value] || 1.0;
-            const col = moodColor[document.getElementById(`quad_mood_${node.id}`)?.value] || 0x997755;
-            const g = new THREE.Group();
-            const mat = new THREE.MeshStandardMaterial({color: col});
-            const body = new THREE.Mesh(new THREE.BoxGeometry(18, 7, 8), mat);
-            body.position.y = 12;
-            g.add(body);
-            const neck = new THREE.Mesh(new THREE.BoxGeometry(5, 8, 5), mat);
-            neck.position.set(9, 15, 0); neck.rotation.z = -0.5;
-            g.add(neck);
-            const head = new THREE.Mesh(new THREE.BoxGeometry(7, 5, 5), mat);
-            head.position.set(13, 18, 0);
-            g.add(head);
-            [[7,3],[7,-3],[-7,3],[-7,-3]].forEach(([lx,lz]) => {
-                const leg = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1, 12, 8), mat);
-                leg.position.set(lx, 6, lz);
-                g.add(leg);
-            });
-            const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1.4, 9, 6), mat);
-            tail.position.set(-10, 13, 0); tail.rotation.z = 0.9;
-            g.add(tail);
-            g.scale.setScalar(size);
+        else if (SUBJECTS[node.type]) {
+            // Geometry comes from the registry; it returns a group whose origin
+            // is the subject's ground point.
+            const g = SUBJECTS[node.type].mesh(readSubject(node.type, node.id), THREE);
             g.position.set(x, y, z);
             preview.scene.add(g);
             preview.objects.push(g);
-        }
-        else if (node.type === 'insect') {
-            const scaleMap = { 'Extreme Macro Close-up': 1.2, 'Life-size Detail': 0.55, 'Swarm / Distant Cloud': 0.35 };
-            const s = scaleMap[document.getElementById(`ins_scale_${node.id}`)?.value] || 0.6;
-            const cnt = document.getElementById(`ins_count_${node.id}`)?.value || 'Single Specimen';
-            const swarmN = cnt === 'Massive Infestation' ? 12 : cnt === 'Swarm' ? 8 : cnt === 'Cluster' ? 4 : cnt === 'A Few' ? 2 : 1;
-            const bodyMat = new THREE.MeshStandardMaterial({color: 0x223322});
-            const wingMat = new THREE.MeshStandardMaterial({color: 0xaaccdd, transparent: true, opacity: 0.4, side: THREE.DoubleSide});
-            const buildBug = () => {
-                const g = new THREE.Group();
-                const abdomen = new THREE.Mesh(new THREE.SphereGeometry(3, 10, 10), bodyMat); abdomen.position.x = -3; abdomen.scale.x = 1.6;
-                const thorax = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 10), bodyMat);
-                const head = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 10), bodyMat); head.position.x = 3;
-                g.add(abdomen); g.add(thorax); g.add(head);
-                const wingL = new THREE.Mesh(new THREE.CircleGeometry(4, 12), wingMat); wingL.position.set(0, 1, 3); wingL.rotation.x = -0.6;
-                const wingR = new THREE.Mesh(new THREE.CircleGeometry(4, 12), wingMat); wingR.position.set(0, 1, -3); wingR.rotation.x = Math.PI + 0.6;
-                g.add(wingL); g.add(wingR);
-                g.scale.setScalar(s);
-                return g;
-            };
-            for (let i = 0; i < swarmN; i++) {
-                const b = buildBug();
-                if (swarmN === 1) {
-                    b.position.set(x, y + 8, z);
-                } else {
-                    const seed = (i * 73 % 40) - 20;
-                    const seed2 = (i * 129 % 40) - 20;
-                    const seed3 = (i * 191 % 30) - 5;
-                    b.position.set(x + seed, y + 8 + seed3, z + seed2);
-                    b.rotation.y = i * 0.9;
-                }
-                preview.scene.add(b);
-                preview.objects.push(b);
-            }
         }
         else if (node.type === 'customloc') {
             const envColor = {
@@ -1727,7 +1631,20 @@ document.addEventListener('keyup', (e) => {
     if(e.code === 'Space') { spaceDown = false; viewport.style.cursor = 'default'; }
 });
 
+// One nav button per registry entry, so a new subject node shows up in the UI
+// without touching index.html.
+function buildSubjectNav() {
+    const host = document.getElementById('subject-nav');
+    if(!host) return;
+    host.innerHTML = SUBJECT_TYPES.map(t => {
+        const d = SUBJECTS[t];
+        return `<button class="nav-btn" style="border-color:${d.nav.color}"
+            onpointerdown="createNode('${t}')">${d.nav.label}</button>`;
+    }).join('');
+}
+
 window.onload = () => {
+    buildSubjectNav();
     if(localStorage.getItem('scene_save')) {
         window.loadWorkspaceData(localStorage.getItem('scene_save'));
     } else {

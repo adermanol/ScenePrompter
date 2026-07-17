@@ -173,5 +173,28 @@ const DB = {
     insectScale: ["Extreme Macro Close-up", "Life-size Detail", "Swarm / Distant Cloud"],
     insectCount: ["Single Specimen", "A Few", "Cluster", "Swarm", "Massive Infestation"],
     insectBehavior: ["Crawling", "Flying", "Hovering", "Swarming", "Feeding", "Building / Nesting", "Fighting", "Emerging / Metamorphosis", "Still / Camouflaged", "Skittering"],
-    insectSurface: ["On a Leaf", "On Human Skin", "On a Flower", "On Decaying Matter", "On a Spiderweb", "In Mid-air Flight", "On Bare Ground", "On Tree Bark", "On Water Surface"]
+    insectSurface: ["On a Leaf", "On Human Skin", "On a Flower", "On Decaying Matter", "On a Spiderweb", "In Mid-air Flight", "On Bare Ground", "On Tree Bark", "On Water Surface"],
+
+    // --- FLYING (birds & winged creatures) ---
+    flySpecies: ["Eagle", "Crow", "Raven", "Owl", "Hawk", "Falcon", "Seagull", "Sparrow", "Pigeon", "Vulture", "Heron", "Swan", "Flamingo", "Hummingbird", "Bat", "Dragon"],
+    flyCount: ["Single", "Pair", "Small Flock", "Large Flock", "Massive Murmuration"],
+    flyAltitude: ["Ground Level", "Treetop", "Low Sky", "High Sky", "Silhouetted Against Sun"],
+    flyAction: ["Soaring", "Gliding", "Diving / Stooping", "Hovering", "Taking Off", "Landing", "Circling", "Perched", "Flapping Frantically"],
+
+    // --- VEHICLE ---
+    vehSpecies: ["Car", "Motorcycle", "Truck", "Van", "Bus", "Train", "Boat", "Ship", "Airplane", "Helicopter", "Bicycle", "Tank", "Spacecraft"],
+    vehEra: ["Vintage / Classic", "1980s", "Modern", "Near-Future", "Futuristic"],
+    vehCondition: ["Pristine", "Dusty", "Rusted", "Damaged", "Burning", "Wrecked"],
+    vehAction: ["Parked", "Idling", "Cruising", "Speeding", "Accelerating", "Drifting", "Braking Hard", "Crashing"],
+
+    // --- CROWD ---
+    crowdDensity: ["Sparse (a handful)", "Moderate", "Dense", "Packed", "Sea of People"],
+    crowdBehavior: ["Commuting", "Watching", "Celebrating", "Dancing", "Protesting", "Rioting", "Panicking", "Fleeing", "Praying"],
+    crowdAttire: ["Modern Casual", "Business Attire", "Period Costume", "Uniforms", "Ragged Clothing", "Festival Dress", "Ceremonial Robes"],
+
+    // --- AQUATIC ---
+    aquSpecies: ["Fish", "Dolphin", "Shark", "Whale", "Octopus", "Jellyfish", "Sea Turtle", "Manta Ray", "Eel", "Crab", "Seal"],
+    aquCount: ["Single", "A Few", "School", "Massive School"],
+    aquWater: ["Crystal Clear Shallows", "Sunlit Blue", "Murky Green", "Deep Dark", "Bioluminescent"],
+    aquAction: ["Swimming", "Gliding", "Hunting", "Breaching", "Drifting", "Darting Away", "Resting on Seabed"]
 };

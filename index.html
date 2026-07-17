@@ -30,8 +30,8 @@
         <button class="nav-btn" style="border-color:#55ff55" onpointerdown="createNode('scene')">Scene</button>
         <button class="nav-btn" style="border-color:#ff55ff" onpointerdown="createNode('style')">Style</button>
         <button class="nav-btn" style="border-color:#ffff55" onpointerdown="createNode('character')">Character</button>
-        <button class="nav-btn" style="border-color:#ffcc00" onpointerdown="createNode('quadruped')">🐾 Quadruped</button>
-        <button class="nav-btn" style="border-color:#aaff55" onpointerdown="createNode('insect')">🐞 Insect</button>
+        <!-- Subject node buttons are generated from the SUBJECTS registry -->
+        <span id="subject-nav"></span>
         <button class="nav-btn" style="border-color:var(--accent-sec)" onpointerdown="createNode('object')">Object</button>
         <button class="nav-btn" style="border-color:#55ff99" onpointerdown="createNode('customloc')">📍 Location</button>
         <button class="nav-btn" style="border-color:#ff9955" onpointerdown="createNode('shot')">Shot Type</button>
@@ -88,6 +88,7 @@
     </div>
 
     <script src="js/db.js"></script>
+    <script src="js/subjects.js"></script>
     <script src="js/promptEngine.js"></script>
     <script src="js/app.js"></script>
 </body>
