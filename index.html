@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ScenePrompter - AI Video Artist OS</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
@@ -66,17 +66,22 @@
             <button class="nav-btn" data-cat="output" onpointerdown="createNode('neg')">Negative</button>
         </nav>
 
-        <div class="file-actions">
-            <!-- Options are generated from the PRESETS table in app.js -->
-            <select id="preset_sel" onchange="loadPresetConfirmed(this.value)"
-                style="background:#111; color:#ccc; border:1px solid rgba(255,255,255,0.09); padding:0 8px;
-                       border-radius:6px; font-weight:700; font-size:0.68rem; cursor:pointer; min-height:34px;">
-                <option value="">-- Presets --</option>
-            </select>
-            <button class="nav-btn" data-cat="tool" data-act="presets" onpointerdown="openPresetManager()" title="Save / manage presets">&#128190;</button>
-            <button class="nav-btn" data-cat="tool" data-act="history" onpointerdown="openHistory()" title="History">History</button>
-            <button class="nav-btn" data-cat="tool" data-act="save" onpointerdown="saveWorkspace()" title="Save">Save</button>
-            <button class="nav-btn" data-cat="tool" data-act="load" onpointerdown="loadWorkspace()" title="Load">Load</button>
+        <div class="overflow-wrap">
+            <!-- Phone: this ⋯ is the only file control; it opens the popover below.
+                 Desktop: hidden, the actions sit inline. -->
+            <button class="nav-btn overflow-btn" data-cat="tool" onpointerdown="toggleOverflow(event)" title="More">&#8943;</button>
+            <div class="file-actions" id="file-actions">
+                <!-- Quick-load dropdown (desktop/tablet only); options from PRESETS in app.js -->
+                <select id="preset_sel" onchange="loadPresetConfirmed(this.value)"
+                    style="background:#111; color:#ccc; border:1px solid rgba(255,255,255,0.09); padding:0 8px;
+                           border-radius:6px; font-weight:700; font-size:0.68rem; cursor:pointer; min-height:34px;">
+                    <option value="">-- Presets --</option>
+                </select>
+                <button class="nav-btn" data-cat="tool" data-act="presets" onpointerdown="openPresetManager()" title="Save / manage presets"><span class="glyph">&#11088;</span>Presets</button>
+                <button class="nav-btn" data-cat="tool" data-act="history" onpointerdown="openHistory()" title="History"><span class="glyph">&#128339;</span>History</button>
+                <button class="nav-btn" data-cat="tool" data-act="save" onpointerdown="saveWorkspace()" title="Save"><span class="glyph">&#128190;</span>Save</button>
+                <button class="nav-btn" data-cat="tool" data-act="load" onpointerdown="loadWorkspace()" title="Load"><span class="glyph">&#128193;</span>Load</button>
+            </div>
         </div>
     </div>
 

@@ -32,10 +32,12 @@ body {
     touch-action: none;
 }
 
-/* INFINITE VIEWPORT — sits below the fixed top bar rather than under it. */
+/* INFINITE VIEWPORT — sits below the fixed top bar rather than under it.
+   The bar reserves the top safe-area (notch), so the viewport starts below it. */
 #viewport {
-    width: 100vw; height: calc(100vh - var(--topbar-h));
-    margin-top: var(--topbar-h);
+    width: 100vw;
+    height: calc(100vh - var(--topbar-h) - env(safe-area-inset-top));
+    margin-top: calc(var(--topbar-h) + env(safe-area-inset-top));
     overflow: hidden; position: relative; cursor: grab;
 }
 #viewport:active { cursor: grabbing; }
@@ -179,8 +181,10 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
    The logo used to be absolutely positioned over the nav's left edge and sat on
    top of the first button. It is part of the layout now, so it cannot collide. */
 .top-bar {
-    position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
-    display: flex; align-items: center; gap: 14px; padding: 0 14px;
+    position: fixed; top: 0; left: 0; right: 0;
+    height: calc(var(--topbar-h) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) calc(14px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left));
+    display: flex; align-items: center; gap: 14px;
     z-index: 1000; background: rgba(6, 7, 9, 0.82);
     backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     border-bottom: 1px solid rgba(255,255,255,0.07);
@@ -261,17 +265,50 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
 
 .file-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
 
-@media (max-width: 720px) {
-    /* Keep the mark, drop the wordmark — the nav needs every pixel. */
+/* The "⋯" overflow trigger and its popover — hidden on desktop, the only file
+   control on phone. */
+.overflow-wrap { position: relative; flex-shrink: 0; }
+.overflow-btn { display: none; }
+
+@media (max-width: 900px) {
+    /* Keep the mark, drop the wordmark — the nav needs the room. */
     .brand-text, .brand-rule { display: none; }
-    /* File actions collapse to glyphs so the node nav keeps the width it needs.
-       Touch target stays 44px. */
-    .file-actions .nav-btn { font-size: 0; padding: 0; min-width: 44px; justify-content: center; }
-    .file-actions .nav-btn::before { font-size: 0.95rem; }
-    .file-actions .nav-btn[data-act="history"]::before { content: "\1F553"; }
-    .file-actions .nav-btn[data-act="save"]::before { content: "\1F4BE"; }
-    .file-actions .nav-btn[data-act="load"]::before { content: "\1F4C2"; }
-    #preset_sel { max-width: 104px; }
+}
+
+/* -------- PHONE ( < 640 ): the top bar becomes brand + tools + overflow.
+   Node-creation moves entirely to the + Add palette; file actions fold into a
+   tap-to-open popover so nothing is pushed off the right edge. -------- */
+@media (max-width: 640px) {
+    :root { --touch-target: 44px; --socket-size: 20px; }
+
+    /* Node-category buttons are redundant with the searchable + Add palette. */
+    .top-nav .nav-btn:not(.primary):not([data-cat="tool"]),
+    .top-nav .nav-sep,
+    #subject-nav { display: none; }
+
+    /* Multi-select box is a desktop power move; long-press covers per-node
+       actions on touch. Dropping it keeps + Add and Random unscrolled at 375px. */
+    #sel-mode-btn { display: none; }
+
+    /* Presets have their own manager button; the quick dropdown is desktop-only. */
+    #preset_sel { display: none; }
+
+    /* Collapse the file actions behind ⋯. */
+    .overflow-btn { display: inline-flex; }
+    .file-actions {
+        display: none; position: absolute; top: calc(100% + 6px); right: 0;
+        flex-direction: column; align-items: stretch; gap: 4px;
+        background: #14161b; border: 1px solid #333; border-radius: 8px;
+        padding: 6px; min-width: 168px; z-index: 1200;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    }
+    .file-actions.open { display: flex; }
+    .file-actions .nav-btn { justify-content: flex-start; width: 100%; font-size: 0.72rem; }
+    .file-actions .nav-btn .glyph { display: inline-block; width: 1.3em; }
+
+    /* Bigger, iOS-zoom-safe form controls inside nodes. */
+    select, input[type="text"], input[type="number"], textarea { min-height: 44px; font-size: 16px; }
+    .spatial-grid select { font-size: 16px; min-height: 40px; }
 }
 
 /* SPATIAL CONTEXT */
@@ -283,7 +320,7 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
 
 /* TOAST NOTIFICATION */
 .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
+    position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(100px);
     background: var(--accent); color: #000; padding: 10px 20px; border-radius: 25px;
     font-weight: bold; font-size: 0.85rem; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 2000;
@@ -293,7 +330,7 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
 
 /* MINIMAP */
 #minimap {
-    position: fixed; right: 20px; bottom: 20px; width: 150px; height: 100px;
+    position: fixed; right: calc(20px + env(safe-area-inset-right)); bottom: calc(20px + env(safe-area-inset-bottom)); width: 150px; height: 100px;
     background: rgba(10,10,10,0.8); border: 1px solid #444; border-radius: 8px;
     z-index: 1000; overflow: hidden; pointer-events: none;
 }

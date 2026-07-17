@@ -1325,6 +1325,23 @@ window.copyStructured = function(id) {
         .catch(() => window.showToast('Copy failed'));
 };
 
+// Phone-only: the ⋯ button toggles the file-actions popover.
+window.toggleOverflow = function(e) {
+    if(e) e.stopPropagation();
+    const fa = document.getElementById('file-actions');
+    if(!fa) return;
+    const open = fa.classList.toggle('open');
+    if(open) {
+        // Close on the next tap anywhere outside the popover.
+        setTimeout(() => document.addEventListener('pointerdown', function off(ev) {
+            if(!ev.target.closest('#file-actions') && !ev.target.closest('.overflow-btn')) {
+                fa.classList.remove('open');
+                document.removeEventListener('pointerdown', off);
+            }
+        }), 0);
+    }
+};
+
 window.openHistory = openHistory;
 window.clearHistory = clearHistory;
 window.exportHistory = exportHistory;
@@ -2164,6 +2181,8 @@ document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape') {
         document.querySelectorAll('#quick-add-modal, #history-modal, #variant-modal, #preset-modal')
             .forEach(m => { if(m) m.style.display = 'none'; });
+        const fa = document.getElementById('file-actions');
+        if(fa) fa.classList.remove('open');
         clearCableSelection();
     }
     if(e.key === 'Delete' || e.key === 'Backspace') {
@@ -2374,7 +2393,15 @@ function renderPresetManager() {
         </div>
         <button class="btn-gen" style="background:var(--cat-output); margin-bottom:14px;"
             onpointerdown="saveAsPreset()">💾 Save current canvas as preset</button>
-        <div style="font-size:0.6rem; color:#666; letter-spacing:0.12em; margin-bottom:6px;">MY PRESETS</div>
+        <div style="font-size:0.6rem; color:#666; letter-spacing:0.12em; margin-bottom:6px;">BUILT-IN</div>
+        ${Object.keys(PRESETS).map(k => `
+            <div style="display:flex; gap:8px; align-items:center; padding:8px; background:#111;
+                 border:1px solid #2a2a2a; border-radius:6px; margin-bottom:6px;">
+                <span style="flex:1; color:#ddd; font-size:0.85rem;">${PRESETS[k].label}</span>
+                <button class="btn-tool" style="flex:0 0 auto; min-width:64px;"
+                    onpointerdown="loadPresetConfirmed('${k}'); document.getElementById('preset-modal').style.display='none';">Load</button>
+            </div>`).join('')}
+        <div style="font-size:0.6rem; color:#666; letter-spacing:0.12em; margin:14px 0 6px;">MY PRESETS</div>
         ${users.length ? users.map(n => `
             <div style="display:flex; gap:8px; align-items:center; padding:8px; background:#111;
                  border:1px solid #2a2a2a; border-radius:6px; margin-bottom:6px;">
@@ -2392,6 +2419,11 @@ function renderPresetManager() {
 window.onload = () => {
     buildSubjectNav();
     buildPresetMenu();
+    // Choosing a file action closes the phone overflow popover behind the modal.
+    const fa = document.getElementById('file-actions');
+    if(fa) fa.addEventListener('pointerdown', e => {
+        if(e.target.closest('.nav-btn')) fa.classList.remove('open');
+    });
     if(localStorage.getItem('scene_save')) {
         window.loadWorkspaceData(localStorage.getItem('scene_save'));
     } else {
