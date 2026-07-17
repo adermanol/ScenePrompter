@@ -19,6 +19,8 @@ const SRC = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js']
   .join('\n;\n');
 eval(SRC + '\n;globalThis.SUBJECTS = SUBJECTS;'
          + '\n;globalThis.SUBJECT_TYPES = SUBJECT_TYPES;'
+         + '\n;globalThis.PLATFORMS = PLATFORMS;'
+         + '\n;globalThis.PLATFORM_IDS = PLATFORM_IDS;'
          + '\n;globalThis.DB = DB;');
 
 let failures = 0;
@@ -221,6 +223,133 @@ SUBJECT_TYPES.forEach(t => {
 });
 eq('prefix çakışması yok', SUBJECT_TYPES.length,
   new Set(SUBJECT_TYPES.map(t => SUBJECTS[t].prefix)).size);
+
+// ---------------------------------------------------------------------------
+console.log('\n=== Faz 3: Platform adaptörleri ===');
+
+// A scene rich enough that every adapter has all eight clauses to work with.
+const pf = {
+  s: nodes.s,
+  sc: { id: 'sc', type: 'scene', el: { style: { left: '0px' } } },
+  q: nodes.q,
+  st: { id: 'st', type: 'style', el: { style: { left: '1px' } } },
+  sh: { id: 'sh', type: 'shot', el: { style: { left: '2px' } } },
+  cm: { id: 'cm', type: 'camera', el: { style: { left: '3px' } } },
+};
+const pfc = Object.keys(pf).filter(k => k !== 's').map(k => ({ from: k, to: 's' }));
+spatial('q');
+set('quad_cust_q', ''); set('quad_spec_q', 'Wolf'); set('quad_size_q', 'Large');
+set('quad_coat_q', 'Sleek Fur'); set('quad_act_q', 'Charging');
+set('quad_mood_q', 'Aggressive'); set('quad_note_q', '');
+set('scn_loc_sc', 'Exterior: Dense Forest'); set('scn_cust_sc', '');
+set('scn_time_sc', 'Night Dark (19:30-04:00)'); set('scn_wea_sc', 'Dense Fog');
+set('scn_mood_sc', 'Nightmarish');
+set('sty_cin_st', 'Dark Fantasy'); set('sty_dir_st', 'Denis Villeneuve');
+set('sty_pal_st', 'Muted / Desaturated');
+set('shot_type_sh', 'Wide Shot (WS)');
+set('cam_sc', ''); set('cam_cm', 'Alexa 35'); set('lens_cm', 'Master Primes');
+set('mm_in_cm', '35'); set('cam_adv_act_cm', 'none'); set('cam_adv_tgt_cm', '');
+set('cam_adv_dist_cm', ''); set('cam_ap_cm', 'f/2.0'); set('cam_iso_cm', '800');
+set('cam_fil_cm', 'None');
+
+eq('her platform tanımlı ve build ediyor', PLATFORM_IDS.length, 9);
+
+const outs = {};
+PLATFORM_IDS.forEach(p => { outs[p] = stack('s', p, pf, pfc); });
+
+PLATFORM_IDS.forEach(p => {
+  eq(`${p}: gerçek çıktı üretti`, outs[p].length > 30 && !outs[p].startsWith('Connect'), true);
+});
+
+// Each adapter must arrange the same material differently — otherwise it is not
+// an adapter, it is a duplicate.
+eq('adaptörler birbirinden farklı çıktı veriyor',
+  new Set(Object.values(outs)).size, PLATFORM_IDS.length);
+
+console.log('\n=== Faz 3: Yeni platformların imzaları ===');
+// The shot clause carries the camera move, so sora must not glue it to the
+// subject with "of" ("Wide shot, static camera of a wolf").
+eq('sora: plan kendi cümlesi, özne ayrı', outs.sora.startsWith('Wide shot, static camera. The frame holds'), true);
+eq('sora: kamera dilini açıkça yazıyor', outs.sora.includes('Shot on Alexa 35'), true);
+eq('pika: kısa — ışık/kamera/ses düşürülmüş',
+  !outs.pika.includes('Shot on') && !outs.pika.includes('mood is'), true);
+eq('hailuo: kamerayı köşeli parantezde veriyor',
+  outs.hailuo.includes('[Shot on Alexa 35'), true);
+eq('generic: etiketli blok', outs.generic.includes('SUBJECT:') && outs.generic.includes('\n'), true);
+eq('generic: satır sonları korundu', outs.generic.split('\n').length > 4, true);
+
+console.log('\n=== Faz 3: Karakter limiti ===');
+eq('pika limiti en dar', PLATFORMS.pika.limit, 350);
+eq('generic limitsiz', PLATFORMS.generic.limit, 0);
+PLATFORM_IDS.forEach(p => {
+  eq(`${p}: limit tanımlı`, typeof PLATFORMS[p].limit, 'number');
+  eq(`${p}: etiket tanımlı`, typeof PLATFORMS[p].label, 'string');
+});
+
+console.log('\n=== Faz 3: Prompt lint ===');
+const lintNodes = { s: nodes.s, sc: pf.sc, at: { id: 'at', type: 'atmos', el: { style: { left: '0px' } } } };
+const lintCables = [{ from: 'sc', to: 's' }, { from: 'at', to: 's' }];
+set('scn_wea_sc', 'Clear'); set('atm_fx_at', 'Rain');
+let g = collectInputs('s', lintNodes, lintCables);
+eq('Clear hava + Rain atmosferi yakalandı',
+  lintScene(g).some(x => x.includes('Clear')), true);
+
+set('scn_loc_sc', 'Interior: Living Room'); set('scn_wea_sc', 'Heavy Rain'); set('atm_fx_at', 'Clear');
+g = collectInputs('s', lintNodes, lintCables);
+eq('iç mekânda yağış yakalandı', lintScene(g).some(x => x.includes('İç mekân')), true);
+
+// Night scene + a sun light set to midday.
+const lit = { id: 'li', type: 'light', el: { style: { left: '0px' } } };
+set('mode_li', 'sunlight'); set('time_li', '13');
+set('scn_loc_sc', 'Exterior: City Street'); set('scn_time_sc', 'Night Dark (19:30-04:00)');
+set('scn_wea_sc', 'Clear');
+g = collectInputs('s', { ...lintNodes, li: lit }, [...lintCables, { from: 'li', to: 's' }]);
+eq('gece sahne + gündüz güneşi yakalandı', lintScene(g).some(x => x.includes('gündüz')), true);
+
+set('time_li', '22');
+g = collectInputs('s', { ...lintNodes, li: lit }, [...lintCables, { from: 'li', to: 's' }]);
+eq('gece güneşi (22:00) uyarı vermiyor', lintScene(g).some(x => x.includes('gündüz')), false);
+
+// B&W palette fighting a colour LUT.
+const bw = { id: 'st2', type: 'style', el: { style: { left: '0px' } } };
+const cg = { id: 'cg', type: 'colorg', el: { style: { left: '0px' } } };
+set('sty_cin_st2', 'Film Noir'); set('sty_dir_st2', 'Roger Deakins');
+set('sty_pal_st2', 'High Contrast B&W');
+set('col_lut_cg', 'Teal & Orange'); set('col_stk_cg', 'Ilford HP5 (B&W)');
+g = collectInputs('s', { s: nodes.s, st2: bw, cg }, [{ from: 'st2', to: 's' }, { from: 'cg', to: 's' }]);
+eq('B&W palet + renkli LUT yakalandı', lintScene(g).some(x => x.includes('Siyah-beyaz')), true);
+
+set('col_lut_cg', 'High Contrast');
+g = collectInputs('s', { s: nodes.s, st2: bw, cg }, [{ from: 'st2', to: 's' }, { from: 'cg', to: 's' }]);
+eq('B&W + High Contrast uyumlu, uyarı yok', lintScene(g).some(x => x.includes('Siyah-beyaz')), false);
+
+console.log('\n=== Faz 3: Yapılandırılmış dışa aktarım ===');
+set('scn_loc_sc', 'Exterior: Dense Forest'); set('scn_time_sc', 'Night Dark (19:30-04:00)');
+set('scn_wea_sc', 'Dense Fog');
+set('stack_plat_s', 'runway');
+const st = buildStructured('s', pf, pfc);
+eq('platform alanı', st.platform, 'runway');
+eq('prompt dolu', st.prompt.length > 40, true);
+eq('kompozisyon 8 cümleciği taşıyor',
+  Object.keys(st.composition).sort().join(','), 'act,audio,cam,env,lit,shot,sty,subj');
+eq('uyarılar dizi', Array.isArray(st.warnings), true);
+eq('sürüm alanı', st.version, 1);
+
+console.log('\n=== Faz 3: Varyant üretici ===');
+set('stack_plat_s', 'runway');
+stack('s', 'runway', pf, pfc);   // populates val_s, which buildVariants reads
+const vs = buildVariants('s');
+eq('3 varyant', vs.map(v => v.key).join(''), 'ABC');
+eq('A temel promptun kendisi', vs[0].text, els['val_s'].value);
+eq('B yoğunlaştırıyor ("large" -> "immense")', vs[1].text.includes('immense'), true);
+eq('B temelden farklı', vs[1].text !== vs[0].text, true);
+eq('C sadeleştiriyor ("showing expressions of" düşer)',
+  vs[2].text.includes('showing expressions of'), false);
+// Deterministic: same graph must give the same variants every call.
+eq('varyantlar tekrarlanabilir (Math.random yok)',
+  JSON.stringify(buildVariants('s')), JSON.stringify(vs));
+set('val_s', 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
+eq('boş promptta varyant yok', buildVariants('s').length, 0);
 
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);

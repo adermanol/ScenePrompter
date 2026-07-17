@@ -399,18 +399,18 @@ window.createNode = function(type) {
     }
     else if (type === 'stack') {
         hasIn = true; hasOut = true; title = "PROMPT STACK";
+        // Platform list comes from the PLATFORMS adapter registry in promptEngine.js.
         content = `
-            <select id="stack_plat_${id}" onchange="triggerUpdate()" style="width:100%; margin-bottom:5px; background:#111; color:#eee; border:1px solid #333; padding:5px; border-radius:4px; font-size:0.75rem; font-weight:bold;">
-                <option value="runway">🎬 Runway Gen-3/4 (Cinematic)</option>
-                <option value="kling">🐉 Kling (High Motion / Audio)</option>
-                <option value="veo">🎥 Google Veo (Realism)</option>
-                <option value="luma">✨ Luma Dream Machine (Dynamic)</option>
-                <option value="midjourney">🚀 Midjourney (Tags)</option>
+            <select id="stack_plat_${id}" onchange="triggerUpdate()" style="width:100%; margin-bottom:5px; background:#111; color:#eee; border:1px solid #333; padding:5px; border-radius:4px; font-size:0.75rem; font-weight:bold; min-height:36px;">
+                ${PLATFORM_IDS.map(p => `<option value="${p}">${PLATFORMS[p].label}</option>`).join('')}
             </select>
             <textarea id="val_${id}" class="stack-output" readonly></textarea>
+            <div id="stack_meta_${id}" style="margin-top:4px;"></div>
             <div class="stack-tools">
                 <button class="btn-tool" onpointerdown="resetStack('${id}')">RESET</button>
                 <button class="btn-tool" onpointerdown="copyStack('${id}')">COPY</button>
+                <button class="btn-tool" onpointerdown="copyStructured('${id}')" title="Yapılandırılmış JSON kopyala">JSON</button>
+                <button class="btn-tool" onpointerdown="showVariants('${id}')" title="A/B/C varyantları">A/B/C</button>
             </div>
             <button class="btn-gen" style="background:#55ff55" onpointerdown="sendToAPI('${id}')">Send to Generator</button>
         `;
@@ -1135,6 +1135,52 @@ window.copyStack = function(id) {
     ta.select(); ta.setSelectionRange(0, 99999);
     navigator.clipboard.writeText(ta.value).then(() => { window.showToast("Copied to clipboard!"); });
 }
+// A/B/C variants of the current prompt, side by side, each copyable.
+window.showVariants = function(id) {
+    const variants = buildVariants(id);
+    if(!variants.length) return window.showToast('Önce bir prompt üret');
+
+    let modal = document.getElementById('variant-modal');
+    if(!modal) {
+        modal = document.createElement('div');
+        modal.id = 'variant-modal';
+        modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);'
+            + 'width:90vw; max-width:640px; max-height:80vh; overflow-y:auto; background:#1a1a1a;'
+            + 'border:1px solid #444; border-radius:8px; z-index:3500; padding:20px;'
+            + 'box-shadow:0 10px 30px rgba(0,0,0,0.8);';
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;
+             border-bottom:1px solid #333; padding-bottom:10px;">
+            <h3 style="margin:0; color:#eee; font-size:1rem;">Prompt Varyantları</h3>
+            <button onclick="document.getElementById('variant-modal').style.display='none'"
+                style="background:none; border:none; color:#fff; cursor:pointer; font-size:1.4rem;
+                min-width:44px; min-height:44px;">&times;</button>
+        </div>
+        ${variants.map(v => `
+            <div style="margin-bottom:12px;">
+                <div style="font-size:0.65rem; color:var(--accent); font-weight:bold; margin-bottom:4px;
+                     font-family:'JetBrains Mono',monospace;">${v.key} — ${v.note} · ${v.text.length} karakter</div>
+                <textarea readonly style="width:100%; height:80px; background:#111; color:#eee;
+                    border:1px solid #333; border-radius:4px; padding:8px; font-size:0.75rem;
+                    resize:vertical;">${v.text}</textarea>
+                <button class="btn-tool" style="margin-top:4px; width:100%;"
+                    onpointerdown="navigator.clipboard.writeText(this.previousElementSibling.value)
+                        .then(()=>window.showToast('${v.key} kopyalandı'))">KOPYALA ${v.key}</button>
+            </div>`).join('')}
+    `;
+};
+
+// Structured export — the shape a generator API will be handed in Faz 6.
+window.copyStructured = function(id) {
+    const data = buildStructured(id, window.nodes, window.cables);
+    navigator.clipboard.writeText(JSON.stringify(data, null, 2))
+        .then(() => window.showToast('Yapılandırılmış JSON kopyalandı'))
+        .catch(() => window.showToast('Kopyalama başarısız'));
+};
+
 window.openHistory = openHistory;
 window.clearHistory = clearHistory;
 window.exportHistory = exportHistory;
