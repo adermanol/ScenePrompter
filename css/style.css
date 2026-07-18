@@ -170,6 +170,15 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
    from the dot it leaves. */
 .out .socket { border-color: var(--cat); }
 
+/* Tap-to-connect: an armed output socket pulses in its category colour until
+   you pick an input (or tap away). */
+@keyframes sock-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.4); } }
+.socket-wrapper.out.armed .socket {
+    background: var(--cat); border-color: var(--cat);
+    box-shadow: 0 0 12px var(--cat);
+    animation: sock-pulse 0.9s ease-in-out infinite;
+}
+
 /* BUTTONS */
 .btn-gen { background: var(--accent); color: #000; border: none; width: 100%; padding: 12px; font-weight: 800; cursor: pointer; border-radius: 6px; margin-top: auto; text-transform: uppercase; letter-spacing: 1px; min-height: 44px; }
 .btn-gen:hover { background: #fff; box-shadow: 0 0 15px var(--accent); }

@@ -29,6 +29,7 @@ viewport.addEventListener('pointerdown', (e) => {
     if(!spaceDown && (e.target.closest('.node-content') || e.target.closest('.top-bar'))) return;
     if(spaceDown || e.target === viewport || e.target.classList.contains('grid-layer')) {
         if(window.clearCableSelection) window.clearCableSelection();
+        if(window.armedSocket) window.disarmSocket();
         activePointers.push(e);
         if (activePointers.length === 1) {
             isPanning = true; 
@@ -535,7 +536,7 @@ window.createNode = function(type) {
     el.setAttribute('data-cat', cat);
 
     el.innerHTML = `
-        ${hasIn ? `<div class="socket-wrapper in" data-node="${id}"><div class="socket"></div></div>` : ''}
+        ${hasIn ? `<div class="socket-wrapper in" data-node="${id}" onpointerdown="inSockTap(event, '${id}')"><div class="socket"></div></div>` : ''}
         <div class="node-header" onpointerdown="nodeDrag(event, '${id}')">
             <span class="node-title">
                 <span class="node-cat">${CATEGORIES[cat].label}</span>
@@ -794,9 +795,61 @@ function findDropTarget(clientX, clientY) {
     return best;
 }
 
+// One validated connect, shared by drag-to-connect and tap-to-connect.
+// Returns true if a cable was made; flashes the target red on an invalid pair.
+function tryConnect(fromId, toId) {
+    if(!fromId || !toId || fromId === toId) return false;
+    const src = window.nodes[fromId], dst = window.nodes[toId];
+    if(!src || !dst) return false;
+    if(!isValidConnection(src.type, dst.type)) {
+        const nEl = document.getElementById(toId);
+        if(nEl) { nEl.style.boxShadow = '0 0 15px red'; setTimeout(() => { nEl.style.boxShadow = 'none'; }, 400); }
+        return false;
+    }
+    if(window.cables.some(c => c.from === fromId && c.to === toId)) return false;   // already wired
+    captureState();
+    window.createCable(fromId, toId);
+    updateCables();
+    window.triggerUpdate();
+    return true;
+}
+
+// --- TAP-TO-CONNECT: touch-friendly alternative to dragging a cable. Tap an
+// output socket to arm it; tap a valid input to wire. Drag still works. ---
+window.armedSocket = null;
+
+function armedOutWrapper(id) {
+    return window.nodes[id]?.el.querySelector('.socket-wrapper.out') || null;
+}
+
+function armSocket(fromId) {
+    disarmSocket();
+    window.armedSocket = fromId;
+    armedOutWrapper(fromId)?.classList.add('armed');
+    markDropTargets(fromId);
+    window.showToast('Tap a target to connect');
+}
+
+function disarmSocket() {
+    if(window.armedSocket) armedOutWrapper(window.armedSocket)?.classList.remove('armed');
+    window.armedSocket = null;
+    clearDropTargets();
+}
+window.disarmSocket = disarmSocket;
+
+// Input socket tapped: if a source is armed, complete the connection.
+window.inSockTap = function(e, toId) {
+    if(!window.armedSocket) return;
+    e.stopPropagation();
+    tryConnect(window.armedSocket, toId);
+    disarmSocket();
+};
+
 let activeCable = null;
+let cabMoved = false;
 window.sockDown = function(e, id) {
     e.stopPropagation();
+    cabMoved = false;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     svgLayer.appendChild(path);
     activeCable = { from: id, path };
@@ -807,6 +860,7 @@ window.sockDown = function(e, id) {
 
 function cabMove(e) {
     if(!activeCable) return;
+    cabMoved = true;
     const n = window.nodes[activeCable.from];
     const sx = parseFloat(n.el.style.left) + n.el.offsetWidth;
     const sy = parseFloat(n.el.style.top) + (n.el.offsetHeight/2);
@@ -826,28 +880,21 @@ function isValidConnection(srcType, dstType) {
 
 function cabUp(e) {
     if(!activeCable) return;
+    const from = activeCable.from;
     const wrapperIn = findDropTarget(e.clientX, e.clientY);
 
     if (wrapperIn) {
-        const toId = wrapperIn.getAttribute('data-node');
-        if (toId && activeCable.from !== toId) {
-            const srcNode = window.nodes[activeCable.from];
-            const dstNode = window.nodes[toId];
-            const dupe = window.cables.some(c => c.from === activeCable.from && c.to === toId);
-
-            if (srcNode && dstNode && !isValidConnection(srcNode.type, dstNode.type)) {
-                const nEl = document.getElementById(dstNode.id);
-                nEl.style.boxShadow = "0 0 15px red";
-                setTimeout(() => { nEl.style.boxShadow = "none"; }, 400);
-            } else if (!dupe) {
-                captureState();   // snapshot before the new cable exists
-                window.createCable(activeCable.from, toId);
-                updateCables();
-                window.triggerUpdate();
-            }
-        }
+        // Dragged onto an input — connect and clear.
+        tryConnect(from, wrapperIn.getAttribute('data-node'));
+        disarmSocket();
+    } else if (!cabMoved) {
+        // A pure tap on the output socket toggles tap-to-connect arming: the
+        // drop-target highlights stay up until you pick an input (or tap away).
+        if (window.armedSocket === from) disarmSocket();
+        else armSocket(from);
+    } else {
+        clearDropTargets();
     }
-    clearDropTargets();
     activeCable.path.remove();
     activeCable = null;
     document.removeEventListener('pointermove', cabMove);
@@ -2220,6 +2267,7 @@ document.addEventListener('keydown', (e) => {
         const fa = document.getElementById('file-actions');
         if(fa) fa.classList.remove('open');
         clearCableSelection();
+        disarmSocket();
     }
     if(e.key === 'Delete' || e.key === 'Backspace') {
         if(document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {

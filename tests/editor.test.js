@@ -140,6 +140,33 @@ async function main() {
   check('kaynak bozulmadı', doc.getElementById(`chr_name_${dSrc}`).value, 'ORIGINAL');
   check('kopya kategori rengini taşıyor', window.nodes[dDup].el.getAttribute('data-cat'), 'subject');
 
+  console.log('\n=== 6d. Tap-to-connect (dokunmatik kablo) ===');
+  await preset();
+  window.createNode('scene');  const tcScn = 'node_' + window.nodeIdCounter;
+  window.createNode('stack');  const tcStk = 'node_' + window.nodeIdCounter;
+  const noop = { stopPropagation() {} };
+  const before6d = window.cables.length;
+  // arm the scene output, then tap the stack input
+  window.armedSocket = tcScn;
+  window.inSockTap(noop, tcStk);
+  check('tap-connect: kablo kuruldu', window.cables.some(c => c.from === tcScn && c.to === tcStk), true);
+  check('tap-connect: bağlantı sonrası disarm', window.armedSocket, null);
+  // arming again + same target must not double-wire
+  window.armedSocket = tcScn;
+  window.inSockTap(noop, tcStk);
+  check('tap-connect: çift kablo kurulmuyor', window.cables.filter(c => c.from === tcScn && c.to === tcStk).length, 1);
+  // invalid pair: a position output into a sequence (which only takes a stack)
+  window.createNode('position'); const tcPos = 'node_' + window.nodeIdCounter;
+  window.createNode('sequence'); const tcSeq = 'node_' + window.nodeIdCounter;
+  const beforeInvalid = window.cables.length;
+  window.armedSocket = tcPos;
+  window.inSockTap(noop, tcSeq);
+  check('tap-connect: geçersiz çift bağlanmıyor', window.cables.length, beforeInvalid);
+  check('tap-connect: geçersiz denemede de disarm', window.armedSocket, null);
+  // tapping an input with nothing armed does nothing
+  window.inSockTap(noop, tcStk);
+  check('tap-connect: armed değilken input dokunuşu no-op', window.cables.length, beforeInvalid);
+
   console.log('\n=== 7. Undo: node ekleme geri alınıyor mu ===');
   await preset();
   const n7 = Object.keys(window.nodes).length;
