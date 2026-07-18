@@ -111,7 +111,19 @@ path.active-cable { stroke: var(--accent); stroke-width: 4px; filter: drop-shado
     display: flex; justify-content: space-between; align-items: center;
     cursor: grab; color: #bbb; flex-shrink: 0;
 }
-.node-title { display: flex; flex-direction: column; gap: 2px; line-height: 1; }
+.node-title { display: flex; flex-direction: column; gap: 2px; line-height: 1; flex: 1; }
+
+/* Collapse toggle: folds the node to its header chip. The chevron rotates when
+   collapsed; a collapsed node keeps its sockets so it can still be wired. */
+.collapse-btn {
+    background: none; border: none; color: #7a8380; cursor: pointer;
+    font-size: 0.8rem; line-height: 1; padding: 0 8px; min-width: 34px;
+    align-self: stretch; transition: transform 0.15s, color 0.15s;
+}
+.collapse-btn:hover { color: #fff; }
+.node.collapsed .collapse-btn { transform: rotate(-90deg); }
+.node.collapsed .node-content { display: none; }
+.node.collapsed { min-height: 0; height: auto !important; resize: none; }
 .node-cat {
     font-family: 'JetBrains Mono', monospace; font-size: 0.48rem; font-weight: 500;
     letter-spacing: 0.14em; color: var(--cat); opacity: 0.9;

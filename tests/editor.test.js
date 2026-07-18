@@ -185,6 +185,23 @@ async function main() {
   window.undo();
   check('tidy geri alınabiliyor', Object.values(window.nodes).every(n => n.el.style.left === '40px'), false);
 
+  console.log('\n=== 6f. Node collapse + kalıcılık ===');
+  await preset();
+  window.createNode('scene'); const colId = 'node_' + window.nodeIdCounter;
+  check('başlangıçta açık', window.nodes[colId].el.classList.contains('collapsed'), false);
+  window.toggleCollapse(colId);
+  check('toggle: collapsed oldu', window.nodes[colId].el.classList.contains('collapsed'), true);
+  check('serialize collapsed taşıyor', window.serializeWorkspace().nodes[colId].collapsed, true);
+  window.toggleCollapse(colId);
+  check('toggle: tekrar açıldı', window.nodes[colId].el.classList.contains('collapsed'), false);
+  // save/load roundtrip keeps the collapsed flag
+  window.toggleCollapse(colId);
+  const saved6f = JSON.stringify(window.serializeWorkspace());
+  window.loadWorkspaceData(saved6f);
+  await wait(20);
+  const reloaded = Object.values(window.nodes).find(n => n.type === 'scene' && n.el.classList.contains('collapsed'));
+  check('load sonrası collapsed korundu', !!reloaded, true);
+
   console.log('\n=== 7. Undo: node ekleme geri alınıyor mu ===');
   await preset();
   const n7 = Object.keys(window.nodes).length;

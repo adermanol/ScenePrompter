@@ -538,6 +538,7 @@ window.createNode = function(type) {
     el.innerHTML = `
         ${hasIn ? `<div class="socket-wrapper in" data-node="${id}" onpointerdown="inSockTap(event, '${id}')"><div class="socket"></div></div>` : ''}
         <div class="node-header" onpointerdown="nodeDrag(event, '${id}')">
+            <button class="collapse-btn" onpointerdown="event.stopPropagation(); toggleCollapse('${id}')" title="Collapse / expand">▾</button>
             <span class="node-title">
                 <span class="node-cat">${CATEGORIES[cat].label}</span>
                 <span>${title}</span>
@@ -556,6 +557,16 @@ window.createNode = function(type) {
     el.addEventListener('pointerup', cancelLongPress);
     el.addEventListener('pointerleave', cancelLongPress);
 }
+
+// Fold a node down to its header chip (and back). In the tidy mobile column this
+// lets you skim past finished nodes; on desktop it declutters a busy canvas.
+window.toggleCollapse = function(id) {
+    const n = window.nodes[id];
+    if(!n) return;
+    n.el.classList.toggle('collapsed');
+    updateCables();   // node height changed, so the cable anchors move with it
+    window.updateMinimap();
+};
 
 window.toggleLight = function(id) {
     const mode = document.getElementById(`mode_${id}`).value;
@@ -932,7 +943,7 @@ function serializeWorkspace() {
         n.el.querySelectorAll('input, select, textarea').forEach(el => {
             if(el.id) nodeState[el.id] = el.type === 'checkbox' ? el.checked : el.value;
         });
-        state.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, zoom: n.zoom, state: nodeState };
+        state.nodes[id] = { type: n.type, x: n.el.style.left, y: n.el.style.top, zoom: n.zoom, collapsed: n.el.classList.contains('collapsed'), state: nodeState };
     }
     state.cables = window.cables.map(c => ({ from: c.from, to: c.to }));
     return state;
@@ -972,6 +983,7 @@ function restoreState(state) {
                 }
             }
             if(n.type === 'light') window.toggleLight(id);
+            if(d.collapsed) n.el.classList.add('collapsed');
         }
     }
     window.nodeIdCounter = state.counter;   // put the counter back where it was
@@ -1133,7 +1145,8 @@ window.loadWorkspaceData = function(str) {
                 else el.value = d.state[key];
             }
         }
-        if(n.type === 'light') window.toggleLight(oldId); 
+        if(n.type === 'light') window.toggleLight(oldId);
+        if(d.collapsed) n.el.classList.add('collapsed');
     }
     window.nodeIdCounter = maxId;
     
