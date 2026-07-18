@@ -1287,7 +1287,7 @@ window.showVariants = function(id) {
     let modal = document.getElementById('variant-modal');
     if(!modal) {
         modal = document.createElement('div');
-        modal.id = 'variant-modal';
+        modal.id = 'variant-modal'; modal.className = 'modal-sheet';
         modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);'
             + 'width:90vw; max-width:640px; max-height:80vh; overflow-y:auto; background:#1a1a1a;'
             + 'border:1px solid #444; border-radius:8px; z-index:3500; padding:20px;'
@@ -1323,6 +1323,42 @@ window.copyStructured = function(id) {
     navigator.clipboard.writeText(JSON.stringify(data, null, 2))
         .then(() => window.showToast('Structured JSON copied'))
         .catch(() => window.showToast('Copy failed'));
+};
+
+// Pan (and gently zoom) the canvas so a node sits centered in the visible area,
+// between the top bar and the bottom action bar.
+window.focusNode = function(id) {
+    const n = window.nodes[id];
+    if(!n) return;
+    const topH = document.querySelector('.top-bar')?.offsetHeight || 60;
+    const botH = window.innerWidth <= 640 ? 60 : 0;   // action bar height on phone
+    const cx = window.innerWidth / 2;
+    const cy = topH + (window.innerHeight - topH - botH) / 2;
+    const nx = parseFloat(n.el.style.left) + n.el.offsetWidth / 2;
+    const ny = parseFloat(n.el.style.top) + n.el.offsetHeight / 2;
+    if(window.innerWidth <= 640) worldState.zoom = Math.min(worldState.zoom, 0.7);
+    worldState.x = cx - nx * worldState.zoom;
+    worldState.y = cy - ny * worldState.zoom;
+    window.updateWorld();
+};
+
+// Bottom-bar "Preview": jump to the preview node, creating one if none exists.
+window.focusPreview = function() {
+    let id = Object.keys(window.nodes).find(k => window.nodes[k].type === 'preview');
+    if(!id) { window.createNode('preview'); id = 'node_' + window.nodeIdCounter; }
+    setTimeout(() => window.focusNode(id), 30);
+};
+
+// Bottom-bar "Generate": run the first stack that has a real prompt.
+window.generateNow = function() {
+    const stacks = Object.values(window.nodes).filter(n => n.type === 'stack');
+    if(!stacks.length) return window.showToast('Add a Stack node first');
+    const ready = stacks.find(s => {
+        const v = document.getElementById(`val_${s.id}`)?.value || '';
+        return v && !v.startsWith('Connect');
+    });
+    if(!ready) return window.showToast('Connect nodes to a Stack first');
+    sendToAPI(ready.id);
 };
 
 // Phone-only: the ⋯ button toggles the file-actions popover.
@@ -2368,7 +2404,7 @@ window.openPresetManager = function() {
     let modal = document.getElementById('preset-modal');
     if(!modal) {
         modal = document.createElement('div');
-        modal.id = 'preset-modal';
+        modal.id = 'preset-modal'; modal.className = 'modal-sheet';
         modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);'
             + 'width:90vw; max-width:420px; max-height:80vh; overflow-y:auto; background:#1a1a1a;'
             + 'border:1px solid #444; border-radius:8px; z-index:3500; padding:20px;'

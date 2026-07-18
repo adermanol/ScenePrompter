@@ -270,6 +270,12 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
 .overflow-wrap { position: relative; flex-shrink: 0; }
 .overflow-btn { display: none; }
 
+/* Phone thumb-zone bar — the four things you do most, within reach. Hidden on
+   desktop, where the top bar covers them. */
+.action-bar { display: none; }
+.sheet-grab { display: none; }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+
 @media (max-width: 900px) {
     /* Keep the mark, drop the wordmark — the nav needs the room. */
     .brand-text, .brand-rule { display: none; }
@@ -287,8 +293,11 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
     #subject-nav { display: none; }
 
     /* Multi-select box is a desktop power move; long-press covers per-node
-       actions on touch. Dropping it keeps + Add and Random unscrolled at 375px. */
+       actions on touch. */
     #sel-mode-btn { display: none; }
+
+    /* + Add and Random live in the bottom action bar on phone, not the top bar. */
+    .phone-hide { display: none; }
 
     /* Presets have their own manager button; the quick dropdown is desktop-only. */
     #preset_sel { display: none; }
@@ -309,6 +318,49 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
     /* Bigger, iOS-zoom-safe form controls inside nodes. */
     select, input[type="text"], input[type="number"], textarea { min-height: 44px; font-size: 16px; }
     .spatial-grid select { font-size: 16px; min-height: 40px; }
+
+    /* ---- Bottom action bar: the thumb-zone primary actions ---- */
+    .action-bar {
+        display: flex; position: fixed; left: 0; right: 0; bottom: 0;
+        height: calc(56px + env(safe-area-inset-bottom));
+        padding: 0 6px env(safe-area-inset-bottom);
+        align-items: center; gap: 6px; z-index: 1500;
+        background: rgba(8,9,12,0.95);
+        backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+        border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .action-bar button {
+        flex: 1; min-height: 46px; border-radius: 10px; cursor: pointer;
+        background: rgba(22,24,30,0.9); border: 1px solid rgba(255,255,255,0.1);
+        color: #cdd6d4; font-family: inherit; font-weight: 700; font-size: 0.58rem;
+        letter-spacing: 0.05em; text-transform: uppercase;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    }
+    .action-bar button .ic { font-size: 1.05rem; line-height: 1; }
+    .action-bar button.pri { background: var(--accent); color: #00201f; border-color: var(--accent); }
+
+    /* The bar owns the bottom; the minimap is a desktop overview affordance. */
+    #minimap { display: none; }
+
+    /* ---- Modals become bottom sheets (override their inline centering) ---- */
+    .modal-sheet {
+        top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+        transform: none !important; width: 100% !important; max-width: none !important;
+        max-height: 82vh !important; border-radius: 16px 16px 0 0 !important;
+        border-bottom: none !important; padding-bottom: env(safe-area-inset-bottom) !important;
+        /* Slide up on open. Only here — where transform is none — so it never
+           fights the desktop centering transform. */
+        animation: sheet-up 0.22s cubic-bezier(0.2,0.7,0.2,1);
+    }
+    .sheet-grab {
+        display: block; width: 36px; height: 4px; border-radius: 3px;
+        background: rgba(255,255,255,0.22); margin: 8px auto 2px;
+    }
+    #quick-add-list { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-sheet { animation: none !important; }
 }
 
 /* SPATIAL CONTEXT */
