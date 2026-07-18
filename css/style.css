@@ -308,6 +308,10 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
     /* + Add and Random live in the bottom action bar on phone, not the top bar. */
     .phone-hide { display: none; }
 
+    /* Full-width nodes read like a mobile form once Tidy stacks them in a
+       column. (Inline widths — e.g. the preview node — still win.) */
+    .node { width: min(92vw, 380px); }
+
     /* Presets have their own manager button; the quick dropdown is desktop-only. */
     #preset_sel { display: none; }
 

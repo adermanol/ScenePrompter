@@ -167,6 +167,24 @@ async function main() {
   window.inSockTap(noop, tcStk);
   check('tap-connect: armed değilken input dokunuşu no-op', window.cables.length, beforeInvalid);
 
+  console.log('\n=== 6e. Tidy: nodes bir sütuna diziliyor ===');
+  await preset();   // cyberpunk: scattered nodes at various x
+  const preTidyX = Object.values(window.nodes).map(n => n.el.style.left);
+  const wereScattered = new Set(preTidyX).size > 1;
+  window.tidyLayout();
+  const allAt40 = Object.values(window.nodes).every(n => n.el.style.left === '40px');
+  check('tidy öncesi dağınıktı', wereScattered, true);
+  check('tidy sonrası hepsi tek sütunda (x=40)', allAt40, true);
+  // nodes should be ordered by category stage top-to-bottom
+  const order = Object.values(window.nodes)
+    .sort((a, b) => parseFloat(a.el.style.top) - parseFloat(b.el.style.top))
+    .map(n => n.type);
+  const sceneIdx = order.indexOf('scene');
+  const stackIdx = order.indexOf('stack');
+  check('tidy: source (scene) output (stack) üstünde', sceneIdx < stackIdx, true);
+  window.undo();
+  check('tidy geri alınabiliyor', Object.values(window.nodes).every(n => n.el.style.left === '40px'), false);
+
   console.log('\n=== 7. Undo: node ekleme geri alınıyor mu ===');
   await preset();
   const n7 = Object.keys(window.nodes).length;

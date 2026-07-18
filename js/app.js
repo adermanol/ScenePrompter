@@ -1389,6 +1389,61 @@ window.focusNode = function(id) {
     window.updateWorld();
 };
 
+// Frame every node in the viewport (between the bars), zoomed to fit.
+window.fitToView = function() {
+    const ids = Object.keys(window.nodes);
+    if(!ids.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    ids.forEach(id => {
+        const el = window.nodes[id].el;
+        const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x + el.offsetWidth); maxY = Math.max(maxY, y + el.offsetHeight);
+    });
+    const topH = document.querySelector('.top-bar')?.offsetHeight || 60;
+    const botH = window.innerWidth <= 640 ? 60 : 0;
+    const pad = 30;
+    const availW = window.innerWidth - pad * 2;
+    const availH = window.innerHeight - topH - botH - pad * 2;
+    const bw = Math.max(maxX - minX, 1), bh = Math.max(maxY - minY, 1);
+    const zoom = Math.max(0.1, Math.min(availW / bw, availH / bh, 1.2));
+    worldState.zoom = zoom;
+    worldState.x = pad + (availW - bw * zoom) / 2 - minX * zoom;
+    worldState.y = topH + pad + (availH - bh * zoom) / 2 - minY * zoom;
+    window.updateWorld();
+};
+
+// Arrange nodes into a single readable column (grouped by production stage),
+// then show the top at 1:1 so a phone can pan straight down it like a form.
+const TIDY_ORDER = ['source', 'subject', 'light', 'camera', 'grade', 'output'];
+window.tidyLayout = function() {
+    const ids = Object.keys(window.nodes);
+    if(!ids.length) return;
+    captureState();
+    ids.sort((a, b) => {
+        const ca = TIDY_ORDER.indexOf(categoryOf(window.nodes[a].type));
+        const cb = TIDY_ORDER.indexOf(categoryOf(window.nodes[b].type));
+        if(ca !== cb) return ca - cb;
+        return parseFloat(window.nodes[a].el.style.top) - parseFloat(window.nodes[b].el.style.top);
+    });
+    let y = 40;
+    ids.forEach(id => {
+        const el = window.nodes[id].el;
+        el.style.left = '40px';
+        el.style.top = y + 'px';
+        y += el.offsetHeight + 28;
+    });
+    updateCables();
+    // Show the top of the column at 1:1, centered horizontally.
+    const topH = document.querySelector('.top-bar')?.offsetHeight || 60;
+    const nodeW = window.nodes[ids[0]].el.offsetWidth || 260;
+    worldState.zoom = 1;
+    worldState.x = window.innerWidth / 2 - (40 + nodeW / 2);
+    worldState.y = topH + 20;
+    window.updateWorld();
+    window.showToast('Tidied into a column');
+};
+
 // Bottom-bar "Preview": jump to the preview node, creating one if none exists.
 window.focusPreview = function() {
     let id = Object.keys(window.nodes).find(k => window.nodes[k].type === 'preview');
