@@ -99,13 +99,53 @@ const val = id => { const el = document.getElementById(id); return el ? el.value
 const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 const trimList = s => (s || '').replace(/,\s*$/, '');
 
+function readMaterial(id) {
+    const v = { id, type: val(`mat_type_${id}`) };
+    ['substance', 'texture', 'finish', 'opacity', 'tint', 'condition', 'character', 'kinesthetic', 'energy', 'energy_int', 'synesthetic', 'note']
+        .forEach(f => v[f] = val(`mat_${f}_${id}`));
+    return v;
+}
+
+function formatMaterialPhrase(mat) {
+    if (!mat || (!mat.type && !mat.substance && !mat.texture && !mat.finish && !mat.opacity && !mat.tint && !mat.condition && !mat.character && !mat.kinesthetic && !mat.energy && !mat.synesthetic && !mat.note)) return '';
+    
+    let base = mat.type || [mat.texture, mat.substance].filter(Boolean).join(' ').toLowerCase();
+    if (!base) base = 'material';
+    
+    let parts = [];
+    if (mat.condition) parts.push(mat.condition.toLowerCase());
+    if (mat.finish) parts.push(mat.finish.toLowerCase());
+    parts.push(base);
+    parts.push('surface');
+    
+    let phrase = "with a " + parts.join(' ');
+    
+    if (mat.tint) phrase += `, tinted ${mat.tint.toLowerCase()}`;
+    if (mat.kinesthetic) phrase += `, ${mat.kinesthetic.toLowerCase()}`;
+    if (mat.energy && mat.energy !== 'None') phrase += `, emitting a ${mat.energy.toLowerCase()}`;
+    if (mat.synesthetic) phrase += `, ${mat.synesthetic.toLowerCase()}`;
+    if (mat.note) phrase += `, ${mat.note.trim()}`;
+    
+    return phrase.trim();
+}
+
 function collectInputs(sid, nodes, cables) {
     const inputs = cables.filter(c => c.to === sid);
     const g = {
         scene: null, style: null, chars: [], objects: [], lights: [], camera: null,
         render: null, shot: null, move: null, atmos: null, color: null, comp: null,
-        neg: null, subjects: [], customLoc: null,
+        neg: null, subjects: [], customLoc: null, positions: {}, materials: {},
     };
+    // Position and Material nodes are a special case. They don't connect to the stack,
+    // they connect to the subject they modify. We must scan ALL cables.
+    cables.forEach(c => {
+        if (nodes[c.from]?.type === 'position') {
+            g.positions[c.to] = readPosition(c.from);
+        }
+        if (nodes[c.to]?.type === 'material') {
+            g.materials[c.from] = readMaterial(c.to);
+        }
+    });
     inputs.forEach(c => {
         const n = nodes[c.from];
         if (!n) return;
@@ -226,6 +266,8 @@ function buildComposition(g) {
         if (prop) bits.push(`holding ${prop}`);
         const sp = formatSpatial(id);
         if (sp) bits.push(`positioned ${sp}`);
+        const matPhrase = g.materials[id] ? formatMaterialPhrase(g.materials[id]) : '';
+        if (matPhrase) bits.push(matPhrase);
         if (emo) bits.push(`showing expressions of ${emo}`);
         if (micro) bits.push(micro);
         sArr.push(bits.join(', '));
@@ -250,7 +292,10 @@ function buildComposition(g) {
     g.subjects.forEach(sn => {
         const def = SUBJECTS[sn.type];
         const v = readSubject(sn.type, sn.id);
-        sArr.push(def.phrase(v, formatSpatial(sn.id)));
+        let s = def.phrase(v, formatSpatial(sn.id));
+        const matPhrase = g.materials[sn.id] ? formatMaterialPhrase(g.materials[sn.id]) : '';
+        if (matPhrase) s += `, ${matPhrase}`;
+        sArr.push(s);
         const a = def.action(v);
         if (a) aArr.push(a);
         (def.audio ? def.audio(v) : []).forEach(x => { audio += x + ', '; });
@@ -293,10 +338,10 @@ function buildComposition(g) {
         if (glass) camBits.push(`with a ${glass} lens`);
         cam = camBits.join(' ');
         const extra = [];
-        if (fmt) extra.push(`${fmt} format`);
+        if (fmt) extra.push(`${fmt.toLowerCase()} camera`);
         if (fps) extra.push(fps.toLowerCase());
         if (focus) extra.push(focus.toLowerCase());
-        if (angle) extra.push(`${angle.toLowerCase()} angle`);
+        if (angle) extra.push(angle.toLowerCase());
         if (extra.length) cam += `${cam ? ', ' : ''}${extra.join(', ')}`;
         const advAct = val(`cam_adv_act_${id}`) || 'none';
         const advTgt = val(`cam_adv_tgt_${id}`);
@@ -383,6 +428,12 @@ function buildMidjourneyTags(c, g) {
         add(val(`chr_gait_${id}`));
         const actEl = document.getElementById(`chr_act_${id}`);
         if (actEl && actEl.value) tags.push(actEl.value.split(': ').pop());
+        const mat = g.materials[id];
+        if (mat) {
+            add(mat.type); add(mat.finish); add(mat.tint, v => v + ' tint');
+            add(mat.condition); add(mat.character);
+            add(mat.energy && mat.energy !== 'None' ? mat.energy : '');
+        }
     });
     if (g.customLoc) {
         const id = g.customLoc.id;
@@ -398,6 +449,12 @@ function buildMidjourneyTags(c, g) {
         const def = SUBJECTS[sn.type];
         const v = readSubject(sn.type, sn.id);
         (def.tags ? def.tags(v) : []).forEach(t => tags.push(t));
+        const mat = g.materials[sn.id];
+        if (mat) {
+            add(mat.type); add(mat.finish); add(mat.tint, v => v + ' tint');
+            add(mat.condition); add(mat.character);
+            add(mat.energy && mat.energy !== 'None' ? mat.energy : '');
+        }
     });
     g.objects.forEach(o => add(val(`val_${o.id}`)));
     if (g.atmos) add(val(`atm_fx_${g.atmos.id}`));

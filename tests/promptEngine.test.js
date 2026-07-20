@@ -14,7 +14,7 @@ global.localStorage = { getItem: () => null, setItem: () => {} };
 // subjects.js defines the SUBJECTS registry that updateStack() reads from.
 // Function declarations leak out of a direct eval, but `const` bindings do not —
 // hence the explicit re-export of the const-declared registry and data tables.
-const SRC = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js']
+const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/promptEngine.js']
   .map(f => fs.readFileSync('c:/Works/Projects/ScenePrompter/' + f, 'utf8'))
   .join('\n;\n');
 eval(SRC + '\n;globalThis.SUBJECTS = SUBJECTS;'
@@ -478,11 +478,44 @@ eq('style: referans', out.includes('in the vein of Blade Runner 2049'), true);
 eq('colorgrade: kontrast', out.includes('punchy contrast'), true);
 eq('colorgrade: grain', out.includes('heavy 16mm-style grain'), true);
 eq('colorgrade: halation', out.includes('strong halation around highlights'), true);
-eq('camera: format', out.includes('Large Format format'), true);
-eq('camera: frame rate', out.includes('120 fps (slow motion)'), true);
-eq('camera: odak', out.includes('shallow focus'), true);
-eq('camera: açı', out.includes('low angle angle'), true);
+eq('camera: advanced settings', out.includes('large format camera'), true);
+eq('camera: frame rate', out.includes('slow motion'), true);
+eq('camera: focus', out.includes('shallow focus'), true);
+eq('camera: angle', out.includes('low angle'), true);
 eq('atanmamış gövde/lens "Shot on" üretmiyor', out.includes('Shot on'), false);
+
+// ---------------------------------------------------------------------------
+// 12. MATERIAL MODULE
+// ---------------------------------------------------------------------------
+const matNodes = {
+    m1: { id: 'm1', type: 'material' },
+    chr: { id: 'chr', type: 'character' }
+};
+const matCables = [ { from: 'chr', to: 'm1' }, { from: 'chr', to: 's' } ];
+
+['type', 'substance', 'texture', 'finish', 'opacity', 'tint', 'condition', 'character', 'kinesthetic', 'energy', 'energy_int', 'synesthetic', 'note']
+    .forEach(f => set(`mat_${f}_m1`, ''));
+
+set('chr_name_chr', 'A knight');
+
+const unassignedMatOut = stack('s', 'runway', matNodes, matCables);
+eq('material (unassigned): no effect', unassignedMatOut.includes('A knight'), true);
+eq('material (unassigned): no stray commas', unassignedMatOut.includes('with a'), false);
+
+set('mat_type_m1', 'Liquid Chrome');
+set('mat_finish_m1', 'Mirror-Polished');
+set('mat_tint_m1', 'Blood Red');
+const assignedMatOut = stack('s', 'runway', matNodes, matCables);
+console.log('ASSIGNED MAT OUT:', assignedMatOut);
+eq('material (assigned): appended clause', assignedMatOut.includes('A knight, with a mirror-polished Liquid Chrome surface, tinted blood red'), true);
+
+const mjOut = stack('s', 'midjourney', matNodes, matCables);
+console.log('MJ OUT:', mjOut);
+eq('material (midjourney): tags after host', mjOut.includes('A knight, Liquid Chrome, Mirror-Polished, Blood Red tint'), true);
+
+const gMat = collectInputs('s', matNodes, matCables);
+eq('material: unwraps in collectInputs (host in chars)', gMat.chars.length, 1);
+eq('material: unwraps in collectInputs (mat stored by host id)', gMat.materials['chr'].type, 'Liquid Chrome');
 
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);

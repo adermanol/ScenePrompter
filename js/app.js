@@ -144,7 +144,7 @@ const CATEGORIES = {
     subject: { label: 'SUBJECT', types: ['character', 'object'] },   // + registry subjects
     light:   { label: 'LIGHT',   types: ['light', 'atmos'] },
     camera:  { label: 'CAMERA',  types: ['camera', 'shot', 'cammove', 'position'] },
-    grade:   { label: 'GRADE',   types: ['colorg', 'comp', 'preview'] },
+    grade:   { label: 'GRADE',   types: ['colorg', 'comp', 'preview', 'material'] },
     output:  { label: 'OUTPUT',  types: ['stack', 'sequence', 'neg'] },
 };
 
@@ -451,6 +451,10 @@ window.createNode = function(type) {
         hasIn = false; hasOut = true;
         title = SUBJECTS[type].title;
         content = buildSubjectHTML(type, id);
+    }
+    else if (type === 'material') {
+        hasIn = true; hasOut = true; title = "MATERIAL";
+        content = buildMaterialHTML(id);
     }
     else if (type === 'customloc') {
         hasIn = false; hasOut = true; title = "CUSTOM LOCATION";
@@ -884,8 +888,9 @@ function isValidConnection(srcType, dstType) {
     if (dstType === 'sequence') return srcType === 'stack';
     if (dstType === 'stack') return srcType !== 'position' && srcType !== 'sequence';
     // Subject nodes are scene contents: they can all be previewed and positioned.
-    if (dstType === 'preview') return ['position', 'character', 'object', 'customloc', 'light', 'stack'].includes(srcType) || !!SUBJECTS[srcType];
+    if (dstType === 'preview') return ['position', 'character', 'object', 'customloc', 'light', 'stack', 'material'].includes(srcType) || !!SUBJECTS[srcType];
     if (dstType === 'position') return ['character', 'object', 'light', 'camera'].includes(srcType) || !!SUBJECTS[srcType];
+    if (dstType === 'material') return ['character', 'object', 'customloc'].includes(srcType) || !!SUBJECTS[srcType];
     return false;
 }
 
@@ -1950,9 +1955,10 @@ window.updateThreePreview = function(pid) {
         };
     };
 
-    const renderNodeIn3D = (node, customCoords = null) => {
+    const renderNodeIn3D = (node, customCoords = null, materialV = null) => {
         const coords = customCoords || getSpatialCoords(node.id);
         const {x, y, z} = coords;
+        const preMaterialCount = preview.objects.length;
 
         // Set by the camera branch below once it resolves its tracking target;
         // the lens view then aims at the same point the dashed line points to.
@@ -2269,6 +2275,15 @@ window.updateThreePreview = function(pid) {
                 preview.labels.push({ el, pos: new THREE.Vector3(sunX, sunY + 15, sunZ) });
             }
         }
+        // Apply material override to any meshes this call just added
+        if (materialV) {
+            const vp = visualParams(materialV);
+            if (vp) {
+                preview.objects.slice(preMaterialCount).forEach(obj => {
+                    applyMaterialToMesh(obj, vp, THREE);
+                });
+            }
+        }
     };
 
     inputs.forEach(c => {
@@ -2290,10 +2305,38 @@ window.updateThreePreview = function(pid) {
                 renderNodeIn3D(window.nodes[feeder.from], {x, y, z});
             }
         }
+        else if (srcNode.type === 'material') {
+            const feeder = window.cables.find(f => f.to === srcNode.id);
+            if (feeder && window.nodes[feeder.from]) {
+                renderNodeIn3D(window.nodes[feeder.from], null, readMaterial(srcNode.id));
+            }
+        }
         else {
             renderNodeIn3D(srcNode);
         }
     });
+}
+// Apply material visual parameters to a Three.js object (mesh or group).
+// Guards each property with an `in` check so it's safe against
+// MeshBasicMaterial (used by VFX meshes and customloc's wireframe box).
+function applyMaterialToMesh(obj, vp, THREE) {
+    const apply = (mesh) => {
+        if (!mesh.material) return;
+        const m = mesh.material;
+        if (vp.color !== undefined) m.color = new THREE.Color(vp.color);
+        if ('roughness' in m && vp.roughness !== undefined) m.roughness = vp.roughness;
+        if ('metalness' in m && vp.metalness !== undefined) m.metalness = vp.metalness;
+        if (vp.opacity !== undefined) m.opacity = vp.opacity;
+        if (vp.transparent !== undefined) m.transparent = vp.transparent;
+        if ('emissive' in m && vp.emissive !== undefined) m.emissive = new THREE.Color(vp.emissive);
+        if ('emissiveIntensity' in m && vp.emissiveIntensity !== undefined) m.emissiveIntensity = vp.emissiveIntensity;
+        m.needsUpdate = true;
+    };
+    if (obj.traverse) {
+        obj.traverse(child => { if (child.isMesh) apply(child); });
+    } else if (obj.isMesh) {
+        apply(obj);
+    }
 }
 
 // KEYBOARD SHORTCUTS

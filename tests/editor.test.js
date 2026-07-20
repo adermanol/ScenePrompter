@@ -24,7 +24,7 @@ window.localStorage.clear();
 
 // One eval so the files share scope, exactly like real <script> tags do
 // (db.js declares `const DB` at top level — separate evals would hide it).
-const src = ['js/db.js', 'js/subjects.js', 'js/promptEngine.js', 'js/app.js']
+const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/promptEngine.js', 'js/app.js']
   .map(f => fs.readFileSync(`${ROOT}/${f}`, 'utf8')).join('\n;\n');
 // `const` bindings live in the global lexical scope, not on `window` — re-export
 // the ones the tests need to reach.
@@ -33,11 +33,14 @@ window.eval(src + '\n;window.SUBJECTS = SUBJECTS;'
                 + '\n;window.PRESETS = PRESETS;'
                 + '\n;window.SPATIAL_BUCKETS = SPATIAL_BUCKETS;'
                 + '\n;window.nearestBucket = nearestBucket;'
-                + '\n;window.serializeWorkspace = serializeWorkspace;');
+                + '\n;window.serializeWorkspace = serializeWorkspace;'
+                + '\n;window.isValidConnection = isValidConnection;'
+                + '\n;window.visualParams = visualParams;');
 
 // randomizeAll needs confirm=true; saveAsPreset needs a name from prompt.
 window.confirm = () => true;
 window.prompt = () => 'Test Preset';
+
 
 const doc = window.document;
 const svg = doc.getElementById('svg-layer');
@@ -429,6 +432,52 @@ async function main() {
   window.toggleLensView(pvid);
   window.playCameraMove(pvid);
   check('THREE yokken kontroller patlamıyor', true, true);
+
+  console.log('\n=== 18. Material node ===');
+  await preset();
+  window.createNode('material');
+  const matId = 'node_' + window.nodeIdCounter;
+  const matNode = window.nodes[matId];
+  const hasInSock = !!matNode.el.querySelector('.socket-wrapper.in');
+  const hasOutSock = !!matNode.el.querySelector('.socket-wrapper.out');
+  check('material var, hasIn/hasOut doğru', !!matNode && hasInSock && hasOutSock, true);
+  check('material kategorisi grade', matNode.el.getAttribute('data-cat'), 'grade');
+
+  // isValidConnection truth table
+  check('char -> mat geçerli', window.isValidConnection('character', 'material'), true);
+  check('customloc -> mat geçerli', window.isValidConnection('customloc', 'material'), true);
+  check('subject (registry) -> mat geçerli', window.isValidConnection('quadruped', 'material'), true);
+  check('pos -> mat GEÇERSİZ', window.isValidConnection('position', 'material'), false);
+  check('mat -> mat GEÇERSİZ', window.isValidConnection('material', 'material'), false);
+  check('mat -> stack geçerli', window.isValidConnection('material', 'stack'), true);
+  check('mat -> preview geçerli', window.isValidConnection('material', 'preview'), true);
+  check('mat -> sequence GEÇERSİZ', window.isValidConnection('material', 'sequence'), false);
+
+  // tryConnect end-to-end
+  // cyberpunk preset: node_2 is character
+  check('char -> mat bağlanır', window.tryConnect('node_2', matId) && true, true);
+  
+  window.createNode('position');
+  const posId = 'node_' + window.nodeIdCounter;
+  check('pos -> mat REDDEDİLİR', window.tryConnect(posId, matId) && true, false);
+
+  // Save/Load
+  doc.getElementById(`mat_type_${matId}`).value = 'Liquid Chrome';
+  doc.getElementById(`mat_finish_${matId}`).value = 'Mirror-Polished';
+  doc.getElementById(`mat_energy_int_${matId}`).value = '7';
+  const savedWs = window.serializeWorkspace();
+  window.loadWorkspace(savedWs);
+  await wait(50);
+  check('material type yüklendi', doc.getElementById(`mat_type_${matId}`).value, 'Liquid Chrome');
+  check('material finish yüklendi', doc.getElementById(`mat_finish_${matId}`).value, 'Mirror-Polished');
+  check('material intensity yüklendi', doc.getElementById(`mat_energy_int_${matId}`).value, '7');
+
+  // visualParams (pure function)
+  const v = { type: 'Liquid Chrome', family: 'metallic', finish: 'Mirror-Polished', energy: 'None', opacity: 'Mostly Opaque' };
+  const p = window.visualParams(v);
+  check('vp pure fn: roughness override', p.roughness <= 0.05, true); // From Finish
+  check('vp pure fn: opacity override', p.opacity === 0.85, true); // From Opacity
+  check('vp pure fn: energy=None zeroes it', p.emissive === 0, true);
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);
