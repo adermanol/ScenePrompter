@@ -922,7 +922,7 @@ async function sendToAPI(id) {
 
     const optionsHtml = list.map(m => {
         const jobType = m.job_type || m.jobType || m.id || m.name;
-        const label = m.name || m.label || jobType;
+        const label = m.display_name || m.name || m.label || jobType;
         return `<option value="${jobType}">${label}</option>`;
     }).join('');
 

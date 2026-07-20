@@ -63,7 +63,7 @@ const QUICK_TIMEOUT_MS = 20 * 1000;
 
 // `args` is always an array — never a shell string. This is what keeps a
 // prompt like `; rm -rf ~` an inert single argv element instead of shell text.
-function runHiggsfield(args, { timeout = QUICK_TIMEOUT_MS } = {}) {
+function runHiggsfield(args, { timeout = QUICK_TIMEOUT_MS, parseJson = true } = {}) {
     return new Promise((resolve, reject) => {
         let bin;
         try {
@@ -85,6 +85,10 @@ function runHiggsfield(args, { timeout = QUICK_TIMEOUT_MS } = {}) {
                 }));
                 return;
             }
+            if (!parseJson) {
+                resolve(stdout.toString().trim());
+                return;
+            }
             try {
                 resolve(JSON.parse(stdout));
             } catch (parseErr) {
@@ -96,8 +100,11 @@ function runHiggsfield(args, { timeout = QUICK_TIMEOUT_MS } = {}) {
 
 async function authStatus() {
     try {
-        await runHiggsfield(buildAuthTokenArgs());
-        return { authenticated: true };
+        // `auth token` prints the raw access token as plain text even with
+        // --json (there's nothing to wrap it in) — read it as a bare string
+        // and treat any non-empty result as authenticated.
+        const token = await runHiggsfield(buildAuthTokenArgs(), { parseJson: false });
+        return { authenticated: Boolean(token) };
     } catch (err) {
         if (err.notAuthenticated) return { authenticated: false };
         // Some other failure (CLI missing, etc) — still "not authenticated"
