@@ -834,41 +834,151 @@ function exportHistory() {
     window.showToast("Exported as .txt!");
 }
 
-function sendToAPI(id) {
+// Local helper server (backend/) — bridges to the already-authenticated
+// `higgsfield` CLI. We hold no API key here; change this if the backend runs
+// on a different port.
+const BACKEND_URL = 'http://localhost:3001';
+
+function apiModal() {
+    let modal = document.getElementById('api-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'api-modal';
+        modal.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:420px; max-width:92vw; background:#1a1a1a; border:1px solid #444; border-radius:8px; z-index:4000; padding:20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); text-align:center;";
+        document.body.appendChild(modal);
+    }
+    modal.style.display = 'block';
+    return modal;
+}
+
+function apiModalError(title, message, opts) {
+    opts = opts || {};
+    const modal = apiModal();
+    modal.innerHTML = `
+        <h3 style="margin-top:0; color:#ff6666">⚠ ${title}</h3>
+        <p style="color:#ccc; font-size:0.85rem; text-align:left; white-space:pre-wrap;">${message}</p>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+            ${opts.retryLabel ? `<button id="api-retry-btn" style="flex:1; background:var(--accent); color:#000; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold;">${opts.retryLabel}</button>` : ''}
+            <button onclick="document.getElementById('api-modal').style.display='none'" style="flex:1; background:#333; color:#eee; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold;">Close</button>
+        </div>
+    `;
+    if (opts.onRetry) {
+        document.getElementById('api-retry-btn')?.addEventListener('click', opts.onRetry);
+    }
+}
+
+// Send a Stack's prompt to the local backend, which shells out to the
+// already-authenticated `higgsfield` CLI. Three stages: check the backend is
+// up and authenticated -> let the user pick a real model (fetched live, never
+// hardcoded) -> generate and show the result.
+async function sendToAPI(id) {
     const ta = document.getElementById(`val_${id}`);
     if (!ta || ta.value.trim() === "" || ta.value.startsWith("Connect")) {
         window.showToast("No valid prompt to generate!");
         return;
     }
-    
     addToHistory(ta.value);
 
-    let modal = document.getElementById('api-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'api-modal';
-        modal.style.cssText = "position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:400px; background:#1a1a1a; border:1px solid #444; border-radius:8px; z-index:4000; padding:20px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); text-align:center;";
-        document.body.appendChild(modal);
-    }
-    
-    modal.style.display = 'block';
+    const modal = apiModal();
     modal.innerHTML = `
-        <h3 style="margin-top:0; color:var(--accent)">🚀 Sending to Generator API...</h3>
-        <p style="color:#aaa; font-size:0.8rem; text-align:left; background:#111; padding:10px; border-radius:4px; margin-bottom:15px; height:80px; overflow-y:auto;">${ta.value}</p>
-        <div style="width:100%; background:#333; height:4px; border-radius:2px; overflow:hidden; position:relative; margin-bottom:15px;">
-            <div id="api-progress" style="width:0%; height:100%; background:var(--accent); transition: width 2s linear;"></div>
-        </div>
-        <p id="api-status" style="color:#eee; font-size:0.9rem;">Connecting to server...</p>
+        <h3 style="margin-top:0; color:var(--accent)">🚀 Checking backend...</h3>
+        <p style="color:#888; font-size:0.8rem;">Connecting to ${BACKEND_URL}</p>
     `;
 
-    setTimeout(() => { document.getElementById('api-progress').style.width = '100%'; }, 50);
-    setTimeout(() => { document.getElementById('api-status').innerText = 'Generating Video/Image (Simulation)...'; }, 1000);
-    setTimeout(() => {
-        modal.innerHTML = `
-            <h3 style="margin-top:0; color:#55ff55">✅ Generation Complete!</h3>
-            <p style="color:#aaa; font-size:0.8rem;">(This is a mock response. In production, the media would appear here.)</p>
-            <button onclick="document.getElementById('api-modal').style.display='none'" style="background:var(--accent); color:#000; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold; width:100%;">Close</button>
-        `;
-        window.showToast("Mock Generation Successful!");
-    }, 2500);
+    let status;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/auth/status`);
+        status = await res.json();
+    } catch (e) {
+        apiModalError('Backend not reachable',
+            `Could not reach ${BACKEND_URL}.\n\nStart it with:\n  cd backend\n  npm start`,
+            { retryLabel: 'Retry', onRetry: () => sendToAPI(id) });
+        return;
+    }
+
+    if (!status.authenticated) {
+        apiModalError('Not signed in to Higgsfield',
+            'Run this in a terminal, sign in with your browser, then retry:\n\n  higgsfield auth login',
+            { retryLabel: 'Retry', onRetry: () => sendToAPI(id) });
+        return;
+    }
+
+    let models;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/models?type=video`);
+        if (!res.ok) throw new Error((await res.json()).error || 'request failed');
+        models = await res.json();
+    } catch (e) {
+        apiModalError('Could not load models', e.message,
+            { retryLabel: 'Retry', onRetry: () => sendToAPI(id) });
+        return;
+    }
+
+    const list = Array.isArray(models) ? models : (models.models || models.data || []);
+    if (!list.length) {
+        apiModalError('No models available', 'The Higgsfield account returned an empty model list.');
+        return;
+    }
+
+    const optionsHtml = list.map(m => {
+        const jobType = m.job_type || m.jobType || m.id || m.name;
+        const label = m.name || m.label || jobType;
+        return `<option value="${jobType}">${label}</option>`;
+    }).join('');
+
+    modal.innerHTML = `
+        <h3 style="margin-top:0; color:var(--accent)">🚀 Send to Generator</h3>
+        <p style="color:#aaa; font-size:0.8rem; text-align:left; background:#111; padding:10px; border-radius:4px; margin-bottom:12px; max-height:80px; overflow-y:auto;">${ta.value}</p>
+        <div style="text-align:left; font-size:0.6rem; color:#666; margin-bottom:4px;">MODEL</div>
+        <select id="api-model-select" style="width:100%; margin-bottom:12px;">${optionsHtml}</select>
+        <button id="api-go-btn" style="width:100%; background:var(--accent); color:#000; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold;">Generate</button>
+    `;
+
+    document.getElementById('api-go-btn').addEventListener('click', () => runGeneration(id));
+}
+
+async function runGeneration(stackId) {
+    const jobType = document.getElementById('api-model-select')?.value;
+    const modal = apiModal();
+    modal.innerHTML = `
+        <h3 style="margin-top:0; color:var(--accent)">🚀 Generating...</h3>
+        <p style="color:#888; font-size:0.8rem;">This can take a few minutes for video models. Do not close this tab.</p>
+        <div class="api-spinner" style="width:28px; height:28px; margin:16px auto; border:3px solid #333; border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+    `;
+
+    const structured = buildStructured(stackId, window.nodes, window.cables);
+
+    let result;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jobType,
+                prompt: structured.prompt,
+                negative: structured.negative || undefined,
+                aspectRatio: structured.aspect || undefined,
+            }),
+        });
+        result = await res.json();
+        if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);
+    } catch (e) {
+        apiModalError('Generation failed', e.message,
+            { retryLabel: 'Try again', onRetry: () => sendToAPI(stackId) });
+        return;
+    }
+
+    const url = result.url || result.output_url || (Array.isArray(result.outputs) && result.outputs[0]?.url)
+        || (Array.isArray(result.results) && result.results[0]?.url);
+
+    modal.innerHTML = `
+        <h3 style="margin-top:0; color:#55ff55">✅ Generation Complete!</h3>
+        ${url
+            ? (/\.(mp4|webm|mov)(\?|$)/i.test(url)
+                ? `<video src="${url}" controls autoplay loop style="width:100%; border-radius:4px; margin-bottom:12px;"></video>`
+                : `<img src="${url}" style="width:100%; border-radius:4px; margin-bottom:12px;">`)
+            : `<pre style="color:#aaa; font-size:0.7rem; text-align:left; background:#111; padding:10px; border-radius:4px; max-height:160px; overflow:auto;">${JSON.stringify(result, null, 2)}</pre>`}
+        <button onclick="document.getElementById('api-modal').style.display='none'" style="background:var(--accent); color:#000; border:none; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold; width:100%;">Close</button>
+    `;
+    window.showToast("Generation complete!");
 }

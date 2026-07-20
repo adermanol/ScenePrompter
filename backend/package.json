@@ -1,0 +1,15 @@
+{
+  "name": "sceneprompter-backend",
+  "version": "1.0.0",
+  "description": "Local helper server bridging ScenePrompter's Send to Generator action to the already-authenticated higgsfield CLI.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/buildArgs.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

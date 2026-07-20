@@ -296,6 +296,7 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
 .action-bar { display: none; }
 .sheet-grab { display: none; }
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 900px) {
     /* Keep the mark, drop the wordmark — the nav needs the room. */
