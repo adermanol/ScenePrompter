@@ -2568,6 +2568,26 @@ function renderPresetManager() {
     `;
 }
 
+// One-time tips card. Tap-to-connect and Tidy aren't obvious the first time;
+// this points them out, once, and never again.
+function maybeOnboard() {
+    if(localStorage.getItem('sp_onboarded')) return;
+    const touch = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 640;
+    const card = document.createElement('div');
+    card.className = 'onboard-card';
+    card.innerHTML = `
+        <div class="ob-title">Quick tips</div>
+        <ul>
+            <li><b>Add</b> nodes from the ${touch ? '＋ button below' : '+ Add button (or Tab)'}.</li>
+            <li><b>Connect</b>: tap one socket, then tap another. Dragging works too.</li>
+            <li><b>≡ Tidy</b> lines every node up into a readable column.</li>
+        </ul>
+        <button class="ob-ok">Got it</button>`;
+    document.body.appendChild(card);
+    const dismiss = () => { card.remove(); localStorage.setItem('sp_onboarded', '1'); };
+    card.querySelector('.ob-ok').addEventListener('pointerdown', dismiss);
+}
+
 window.onload = () => {
     buildSubjectNav();
     buildPresetMenu();
@@ -2582,4 +2602,5 @@ window.onload = () => {
         window.loadPreset('cyberpunk');
         window.showToast("Welcome! Loaded Cyberpunk Demo");
     }
+    setTimeout(maybeOnboard, 1400);
 }
