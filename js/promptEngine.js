@@ -879,6 +879,15 @@ async function sendToAPI(id) {
     }
     addToHistory(ta.value);
 
+    // The Stack's own RATIO/RES fields (from a connected Render node, if any)
+    // are stylistic prompt wording, not real API parameters — every
+    // Higgsfield model has its own parameter schema (different field names,
+    // different enums, some need image inputs). We still use structured.aspect
+    // as a *default guess* below when a model happens to expose a matching
+    // aspect-ratio param, but the real, authoritative controls are rendered
+    // live from that model's own schema once it's picked.
+    const structured = buildStructured(id, window.nodes, window.cables);
+
     const modal = apiModal();
     modal.innerHTML = `
         <h3 style="margin-top:0; color:var(--accent)">🚀 Checking backend...</h3>
@@ -931,14 +940,90 @@ async function sendToAPI(id) {
         <p style="color:#aaa; font-size:0.8rem; text-align:left; background:#111; padding:10px; border-radius:4px; margin-bottom:12px; max-height:80px; overflow-y:auto;">${ta.value}</p>
         <div style="text-align:left; font-size:0.6rem; color:#666; margin-bottom:4px;">MODEL</div>
         <select id="api-model-select" style="width:100%; margin-bottom:12px;">${optionsHtml}</select>
+        <div id="api-params-container" style="margin-bottom:8px;"></div>
         <button id="api-go-btn" style="width:100%; background:var(--accent); color:#000; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold;">Generate</button>
     `;
 
-    document.getElementById('api-go-btn').addEventListener('click', () => runGeneration(id));
+    const select = document.getElementById('api-model-select');
+    select.addEventListener('change', () => loadModelParams(select.value, structured));
+    document.getElementById('api-go-btn').addEventListener('click', () => runGeneration(id, structured));
+    loadModelParams(select.value, structured);
 }
 
-async function runGeneration(stackId) {
+// One field per non-prompt schema param: dropdown for enums, checkbox for
+// booleans, text/number input otherwise. Params that need a media reference
+// (image/video/audio — object or array typed) aren't supported by this flow
+// yet; if one is required, Generate is disabled rather than silently sending
+// a job that the CLI will reject.
+function renderParamField(p, presetValue) {
+    const label = p.name.replace(/_/g, ' ').toUpperCase();
+    if (/object|array/.test(p.type)) {
+        const req = !!p.required;
+        return {
+            html: `<div style="text-align:left; font-size:0.65rem; color:${req ? '#ff8888' : '#666'}; margin-bottom:8px;">${label}${req ? ' — required, but file inputs aren\'t supported yet' : ' (optional, skipped)'}</div>`,
+            missingRequired: req,
+        };
+    }
+    if (Array.isArray(p.enum) && p.enum.length) {
+        const current = presetValue !== undefined ? String(presetValue) : String(p.default ?? p.enum[0]);
+        const opts = p.enum.map(v => `<option value="${v}" ${String(v) === current ? 'selected' : ''}>${v}</option>`).join('');
+        return { html: `<div style="text-align:left; margin-bottom:8px;"><div style="font-size:0.6rem; color:#666;">${label}</div><select data-param="${p.name}" style="width:100%;">${opts}</select></div>` };
+    }
+    if (p.type === 'boolean') {
+        const checked = (presetValue !== undefined ? presetValue : p.default) ? 'checked' : '';
+        return { html: `<label style="display:flex; align-items:center; gap:6px; text-align:left; font-size:0.7rem; margin-bottom:8px;"><input type="checkbox" data-param="${p.name}" ${checked}> ${label}</label>` };
+    }
+    const val = presetValue !== undefined ? presetValue : (p.default ?? '');
+    const inputType = p.type === 'integer' || p.type === 'number' ? 'number' : 'text';
+    return { html: `<div style="text-align:left; margin-bottom:8px;"><div style="font-size:0.6rem; color:#666;">${label}</div><input data-param="${p.name}" type="${inputType}" value="${val}" style="width:100%;"></div>` };
+}
+
+// Fetches this model's real parameter schema (model.get, never hardcoded)
+// and renders it into #api-params-container. If the Stack's own RATIO field
+// happens to match one of this model's aspect-ratio-shaped enum params,
+// pre-select it as a convenience default — the user can still change it.
+async function loadModelParams(jobType, structured) {
+    const container = document.getElementById('api-params-container');
+    const goBtn = document.getElementById('api-go-btn');
+    if (!container) return;
+    container.innerHTML = `<p style="color:#666; font-size:0.7rem;">Loading options for this model...</p>`;
+    if (goBtn) goBtn.disabled = true;
+
+    let schema;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/models/${encodeURIComponent(jobType)}`);
+        if (!res.ok) throw new Error((await res.json()).error || 'request failed');
+        schema = await res.json();
+    } catch (e) {
+        container.innerHTML = `<p style="color:#ff8888; font-size:0.7rem;">Could not load options: ${e.message}</p>`;
+        if (goBtn) goBtn.disabled = false;
+        return;
+    }
+
+    const params = (schema.params || []).filter(p => p.name !== 'prompt');
+    let missingRequired = false;
+    const html = params.map(p => {
+        let preset;
+        if (/aspect/i.test(p.name) && structured.aspect && Array.isArray(p.enum) && p.enum.includes(structured.aspect)) {
+            preset = structured.aspect;
+        }
+        const field = renderParamField(p, preset);
+        if (field.missingRequired) missingRequired = true;
+        return field.html;
+    }).join('');
+
+    container.innerHTML = html || `<p style="color:#666; font-size:0.7rem;">This model has no extra options.</p>`;
+    if (goBtn) goBtn.disabled = missingRequired;
+    if (missingRequired) window.showToast('This model needs a file input ScenePrompter doesn\'t support yet — pick another model');
+}
+
+async function runGeneration(stackId, structured) {
     const jobType = document.getElementById('api-model-select')?.value;
+    const params = {};
+    document.querySelectorAll('#api-params-container [data-param]').forEach(el => {
+        params[el.dataset.param] = el.type === 'checkbox' ? el.checked : el.value;
+    });
+
     const modal = apiModal();
     modal.innerHTML = `
         <h3 style="margin-top:0; color:var(--accent)">🚀 Generating...</h3>
@@ -946,19 +1031,12 @@ async function runGeneration(stackId) {
         <div class="api-spinner" style="width:28px; height:28px; margin:16px auto; border:3px solid #333; border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite;"></div>
     `;
 
-    const structured = buildStructured(stackId, window.nodes, window.cables);
-
     let result;
     try {
         const res = await fetch(`${BACKEND_URL}/api/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                jobType,
-                prompt: structured.prompt,
-                negative: structured.negative || undefined,
-                aspectRatio: structured.aspect || undefined,
-            }),
+            body: JSON.stringify({ jobType, prompt: structured.prompt, params }),
         });
         result = await res.json();
         if (!res.ok) throw new Error(result.error || `HTTP ${res.status}`);

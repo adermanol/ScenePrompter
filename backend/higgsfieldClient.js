@@ -8,6 +8,7 @@ const fs = require('fs');
 const {
     buildGenerateArgs,
     buildModelListArgs,
+    buildModelGetArgs,
     buildGenerateGetArgs,
     buildAuthTokenArgs,
 } = require('./buildArgs');
@@ -117,6 +118,10 @@ function listModels(type) {
     return runHiggsfield(buildModelListArgs(type));
 }
 
+function getModel(jobType) {
+    return runHiggsfield(buildModelGetArgs(jobType));
+}
+
 function createGeneration(params) {
     return runHiggsfield(buildGenerateArgs(params), { timeout: GENERATE_TIMEOUT_MS });
 }
@@ -125,4 +130,4 @@ function getGeneration(jobId) {
     return runHiggsfield(buildGenerateGetArgs(jobId));
 }
 
-module.exports = { authStatus, listModels, createGeneration, getGeneration };
+module.exports = { authStatus, listModels, getModel, createGeneration, getGeneration };

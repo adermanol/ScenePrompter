@@ -5,6 +5,7 @@ const assert = require('assert');
 const {
     buildGenerateArgs,
     buildModelListArgs,
+    buildModelGetArgs,
     buildGenerateGetArgs,
     buildAuthTokenArgs,
 } = require('../buildArgs');
@@ -25,11 +26,19 @@ check('temel prompt + wait bayrakları',
     ['generate', 'create', 'seedance_2_0', '--prompt', 'a cinematic shot', '--json',
         '--wait', '--wait-timeout', '20m', '--wait-interval', '5s']);
 
-check('negative + aspectRatio ekleniyor',
-    buildGenerateArgs({ jobType: 'kling_3_0', prompt: 'p', negative: 'blurry', aspectRatio: '16:9' }),
-    ['generate', 'create', 'kling_3_0', '--prompt', 'p', '--json',
-        '--negative-prompt', 'blurry', '--aspect-ratio', '16:9',
-        '--wait', '--wait-timeout', '20m', '--wait-interval', '5s']);
+check('params, modele özgü isimleriyle geçiyor (aspect_ratio, clip_aspect...)',
+    buildGenerateArgs({ jobType: 'veo3', prompt: 'p', params: { aspect_ratio: '16:9', quality: 'high' } }),
+    ['generate', 'create', 'veo3', '--prompt', 'p',
+        '--aspect_ratio', '16:9', '--quality', 'high',
+        '--json', '--wait', '--wait-timeout', '20m', '--wait-interval', '5s']);
+
+check('boş/null/undefined param değerleri atlanıyor',
+    buildGenerateArgs({ jobType: 'x', prompt: 'p', params: { a: '', b: null, c: undefined, d: '0' }, wait: false }),
+    ['generate', 'create', 'x', '--prompt', 'p', '--d', '0', '--json']);
+
+check('geçersiz param adı hata fırlatır',
+    (() => { try { buildGenerateArgs({ jobType: 'x', prompt: 'p', params: { 'bad name;': '1' }, wait: false }); return 'no-throw'; } catch (e) { return e.message; } })(),
+    'Invalid param name: bad name;');
 
 check('wait:false -> wait bayrakları yok',
     buildGenerateArgs({ jobType: 'x', prompt: 'p', wait: false }),
@@ -73,6 +82,12 @@ console.log('\n=== buildModelListArgs ===');
 check('type yoksa filtre yok', buildModelListArgs(), ['model', 'list', '--json']);
 check('type=video', buildModelListArgs('video'), ['model', 'list', '--json', '--video']);
 check('geçersiz type yoksayılıyor', buildModelListArgs('bogus'), ['model', 'list', '--json']);
+
+console.log('\n=== buildModelGetArgs ===');
+check('model get', buildModelGetArgs('veo3'), ['model', 'get', 'veo3', '--json']);
+check('jobType eksikse hata fırlatır',
+    (() => { try { buildModelGetArgs(); return 'no-throw'; } catch (e) { return e.message; } })(),
+    'jobType is required');
 
 console.log('\n=== buildGenerateGetArgs / buildAuthTokenArgs ===');
 check('generate get', buildGenerateGetArgs('job-123'), ['generate', 'get', 'job-123', '--json']);

@@ -7,7 +7,7 @@
 // machine as an already-authenticated CLI.
 const express = require('express');
 const cors = require('cors');
-const { authStatus, listModels, createGeneration, getGeneration } = require('./higgsfieldClient');
+const { authStatus, listModels, getModel, createGeneration, getGeneration } = require('./higgsfieldClient');
 
 const app = express();
 app.use(cors());
@@ -28,10 +28,22 @@ app.get('/api/models', async (req, res) => {
     }
 });
 
+// Each model has its own parameter schema — the frontend fetches it from
+// GET /api/models/:jobType first and renders a form from it, so `params`
+// here is whatever that form collected (e.g. {aspect_ratio: "16:9"} for
+// veo3, {clip_aspect: "9:16"} for clipify). No fixed shape.
+app.get('/api/models/:jobType', async (req, res) => {
+    try {
+        res.json(await getModel(req.params.jobType));
+    } catch (err) {
+        res.status(err.notAuthenticated ? 401 : 502).json({ error: err.message });
+    }
+});
+
 app.post('/api/generate', async (req, res) => {
     try {
-        const { jobType, prompt, negative, aspectRatio } = req.body || {};
-        const result = await createGeneration({ jobType, prompt, negative, aspectRatio, wait: true });
+        const { jobType, prompt, params } = req.body || {};
+        const result = await createGeneration({ jobType, prompt, params, wait: true });
         res.json(result);
     } catch (err) {
         if (/jobType is required|prompt is required/.test(err.message)) {
