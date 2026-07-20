@@ -4,14 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ScenePrompter - AI Video Artist OS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <!-- Fonts self-hosted (latin + latin-ext) so the app has no external
+         dependency and works offline. -->
+    <link rel="stylesheet" href="vendor/fonts.css">
     <link rel="stylesheet" href="css/style.css">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#050505">
-    
-    <!-- Three.js and OrbitControls via CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <meta name="theme-color" content="#0a0b0d">
+
+    <!-- Three.js r128 + OrbitControls, vendored locally (no CDN). -->
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/OrbitControls.js"></script>
 </head>
 <body>
     <div class="top-bar">
@@ -133,5 +135,12 @@
     <script src="js/subjects.js"></script>
     <script src="js/promptEngine.js"></script>
     <script src="js/app.js"></script>
+    <!-- PWA: register the service worker (only runs on https / localhost).
+         addEventListener, not window.onload, so it doesn't clobber app.js. -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+        }
+    </script>
 </body>
 </html>
