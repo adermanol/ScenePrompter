@@ -914,7 +914,10 @@ async function sendToAPI(id) {
 
     let models;
     try {
-        const res = await fetch(`${BACKEND_URL}/api/models?type=video`);
+        // No type filter — fetch every model the account can access (video,
+        // image, audio, text...) so the picker shows all of them, not just
+        // a hardcoded subset.
+        const res = await fetch(`${BACKEND_URL}/api/models`);
         if (!res.ok) throw new Error((await res.json()).error || 'request failed');
         models = await res.json();
     } catch (e) {
@@ -929,11 +932,21 @@ async function sendToAPI(id) {
         return;
     }
 
-    const optionsHtml = list.map(m => {
+    // Grouped by type (video/image/audio/text/...) so every model is visible
+    // and pickable, with related models easy to scan together.
+    const groups = new Map();
+    list.forEach(m => {
         const jobType = m.job_type || m.jobType || m.id || m.name;
         const label = m.display_name || m.name || m.label || jobType;
-        return `<option value="${jobType}">${label}</option>`;
-    }).join('');
+        const type = m.type || 'other';
+        if (!groups.has(type)) groups.set(type, []);
+        groups.get(type).push({ jobType, label });
+    });
+    const optionsHtml = [...groups.entries()].map(([type, items]) => `
+        <optgroup label="${type.toUpperCase()}">
+            ${items.map(m => `<option value="${m.jobType}">${m.label}</option>`).join('')}
+        </optgroup>
+    `).join('');
 
     modal.innerHTML = `
         <h3 style="margin-top:0; color:var(--accent)">🚀 Send to Generator</h3>
