@@ -1,3 +1,15 @@
+// Reverse-lookup a style preset by name across DB.stylePresets' groups —
+// mirrors findColorPalette (colorpalette.js) and readMaterial's family
+// lookup (materials.js). Returns null for '' (unassigned) or an unknown name.
+function findStylePreset(name) {
+    if (!name) return null;
+    for (const group of DB.stylePresets) {
+        const hit = group.items.find(e => e.name === name);
+        if (hit) return hit;
+    }
+    return null;
+}
+
 const SPATIAL_WORDS = {
     extreme_fg: "in the extreme foreground", foreground: "in the foreground", midground: "in the middle ground",
     background: "in the background", far_bg: "far in the background", horizon: "at the horizon",
@@ -135,6 +147,7 @@ function collectInputs(sid, nodes, cables) {
         scene: null, style: null, chars: [], objects: [], lights: [], camera: null,
         render: null, shot: null, move: null, atmos: null, color: null, comp: null,
         neg: null, subjects: [], customLoc: null, positions: {}, materials: {},
+        uiElements: [], graphicDesign: [], colorPalette: null,
     };
     // Position and Material nodes are a special case. They don't connect to the stack,
     // they connect to the subject they modify. We must scan ALL cables.
@@ -164,8 +177,11 @@ function collectInputs(sid, nodes, cables) {
             case 'cammove': g.move = n; break;
             case 'atmos': g.atmos = n; break;
             case 'colorg': g.color = n; break;
+            case 'colorpalette': g.colorPalette = n; break;
             case 'comp': g.comp = n; break;
             case 'neg': g.neg = n; break;
+            case 'uielements': g.uiElements.push(n); break;
+            case 'graphicdesign': g.graphicDesign.push(n); break;
         }
     });
     return g;
@@ -304,6 +320,12 @@ function buildComposition(g) {
     if (g.objects.length) {
         sArr.push(...g.objects.map(o => val(`val_${o.id}`)).filter(v => v && v.trim()));
     }
+    // UI Elements / Graphic Design are hand-built, customloc-style nodes (no
+    // spatial context, no SUBJECTS-registry membership) — but a UI mockup or a
+    // poster genuinely IS "what's depicted", so their phrase joins the subject
+    // clause exactly like a character or object would.
+    g.uiElements.forEach(n => { const p = uiElementsPhrase(readUiElements(n.id)); if (p) sArr.push(p); });
+    g.graphicDesign.forEach(n => { const p = graphicDesignPhrase(readGraphicDesign(n.id)); if (p) sArr.push(p); });
     if (sArr.length) { subj = sArr.join(' and '); act = aArr.join(' while '); }
 
     if (g.lights.length) {
@@ -358,13 +380,14 @@ function buildComposition(g) {
         }
     }
 
-    if (g.style || g.color || g.comp) {
+    if (g.style || g.color || g.comp || g.colorPalette) {
         const arr = [];
         if (g.style) {
             const id = g.style.id;
             const cin = val(`sty_cin_${id}`), dir = val(`sty_dir_${id}`), dp = val(`sty_dp_${id}`);
             const per = val(`sty_per_${id}`), art = val(`sty_art_${id}`);
             const tex = val(`sty_tex_${id}`), ref = val(`sty_ref_${id}`).trim();
+            const preset = findStylePreset(val(`sty_preset_${id}`));
             if (cin) arr.push(`${cin.toLowerCase()} style`);
             if (per) arr.push(`set in the ${per.toLowerCase()}`);
             if (art) arr.push(`${art.toLowerCase()} influence`);
@@ -373,6 +396,7 @@ function buildComposition(g) {
             if (dp) arr.push(`shot by ${dp}`);
             if (tex) arr.push(tex.toLowerCase());
             if (ref) arr.push(`in the vein of ${ref}`);
+            if (preset) arr.push(preset.flavor);
         }
         if (g.color) {
             const id = g.color.id;
@@ -386,6 +410,12 @@ function buildComposition(g) {
             if (grain) arr.push(`${grain.toLowerCase()} grain`);
             if (halo) arr.push(halo.toLowerCase());
             if (vig) arr.push(`${vig.toLowerCase()} vignette`);
+        }
+        if (g.colorPalette) {
+            // Scene-wide colour scheme — connected exactly like Color Grade, not a
+            // Material-style per-object wrapper. Contributes one fluent clause.
+            const p = colorPalettePhrase(readColorPalette(g.colorPalette.id));
+            if (p) arr.push(p);
         }
         if (g.comp) {
             const rule = val(`comp_rule_${g.comp.id}`);
@@ -457,6 +487,8 @@ function buildMidjourneyTags(c, g) {
         }
     });
     g.objects.forEach(o => add(val(`val_${o.id}`)));
+    g.uiElements.forEach(n => uiElementsTags(readUiElements(n.id)).forEach(t => tags.push(t)));
+    g.graphicDesign.forEach(n => graphicDesignTags(readGraphicDesign(n.id)).forEach(t => tags.push(t)));
     if (g.atmos) add(val(`atm_fx_${g.atmos.id}`));
     if (g.style) {
         const id = g.style.id;
@@ -468,6 +500,7 @@ function buildMidjourneyTags(c, g) {
         add(val(`sty_pal_${id}`), v => v + ' colors');
         add(val(`sty_tex_${id}`));
         add(val(`sty_ref_${id}`).trim());
+        add(val(`sty_preset_${id}`));
     }
     if (g.color) {
         const id = g.color.id;
@@ -479,6 +512,7 @@ function buildMidjourneyTags(c, g) {
         add(val(`col_halo_${id}`));
         add(val(`col_vig_${id}`), v => v + ' vignette');
     }
+    if (g.colorPalette) colorPaletteTags(readColorPalette(g.colorPalette.id)).forEach(t => tags.push(t));
     if (g.comp) add(val(`comp_rule_${g.comp.id}`));
     if (g.shot) add(val(`shot_type_${g.shot.id}`));
     if (g.move) add(val(`cam_move_${g.move.id}`));

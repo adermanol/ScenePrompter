@@ -140,11 +140,11 @@ const UNSET_LABEL = '— unassigned';
 // creates can never disagree about what colour they are.
 // ---------------------------------------------------------------------------
 const CATEGORIES = {
-    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render'] },
+    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render', 'uielements', 'graphicdesign'] },
     subject: { label: 'SUBJECT', types: ['character', 'object'] },   // + registry subjects
     light:   { label: 'LIGHT',   types: ['light', 'atmos'] },
     camera:  { label: 'CAMERA',  types: ['camera', 'shot', 'cammove', 'position'] },
-    grade:   { label: 'GRADE',   types: ['colorg', 'comp', 'preview', 'material'] },
+    grade:   { label: 'GRADE',   types: ['colorg', 'colorpalette', 'comp', 'preview', 'material'] },
     output:  { label: 'OUTPUT',  types: ['stack', 'sequence', 'neg'] },
 };
 
@@ -248,6 +248,18 @@ window.createNode = function(type) {
     }
     else if (type === 'style') {
         title = "STYLE"; hasIn = false; hasOut = true;
+        // Preset library: one optgroup+flavor picker over DB.stylePresets (106
+        // entries, 8 groups) — same mechanic as the camera body/lens pickers and
+        // Material's family/type picker. Unassigned by default; contributes
+        // nothing until chosen (unassigned contract).
+        let presetOpts = `<option value="">${UNSET_LABEL}</option>`;
+        DB.stylePresets.forEach(group => {
+            presetOpts += `<optgroup label="${group.label}">`;
+            group.items.forEach(it => {
+                presetOpts += `<option value="${it.name}" data-flavor="${it.flavor}">${it.name}</option>`;
+            });
+            presetOpts += '</optgroup>';
+        });
         content = `
             ${fieldHTML('CINEMATIC STYLE', `sty_cin_${id}`, DB.styleCinematic, DB.styleCinematic[0])}
             ${rowHTML(
@@ -262,6 +274,9 @@ window.createNode = function(type) {
             ${fieldHTML('TEXTURE / FINISH', `sty_tex_${id}`, DB.styleTexture)}
             <div style="font-size:0.6rem; color:#666; margin-top:5px">INFLUENCE / REFERENCE</div>
             <input type="text" class="obj-input" id="sty_ref_${id}" placeholder="e.g. Blade Runner 2049" oninput="triggerUpdate()">
+            ${sectionHTML('PRESET LIBRARY')}
+            <select id="sty_preset_${id}" onchange="window.updateStylePresetFlavor('${id}'); triggerUpdate();">${presetOpts}</select>
+            <div id="sty_preset_flav_${id}" style="font-size:0.6rem; color:#888; min-height:1.2em; margin-top:2px;"></div>
         `;
     }
     else if (type === 'character') {
@@ -472,6 +487,19 @@ window.createNode = function(type) {
             <textarea id="loc_feat_${id}" rows="2" placeholder="hanging cables, flickering neon signs, scattered debris..." oninput="triggerUpdate()" style="width:100%; padding:4px; background:#111; color:#eee; border:1px solid #333; border-radius:4px; font-size:0.75rem; margin-top:2px; resize:none;"></textarea>
         `;
     }
+    else if (type === 'uielements') {
+        hasIn = false; hasOut = true; title = "UI ELEMENTS";
+        content = buildUiElementsHTML(id);
+    }
+    else if (type === 'graphicdesign') {
+        hasIn = false; hasOut = true; title = "GRAPHIC DESIGN";
+        content = buildGraphicDesignHTML(id);
+    }
+    else if (type === 'colorpalette') {
+        hasIn = false; hasOut = true; title = "COLOR PALETTE";
+        content = buildColorPaletteHTML(id);
+        setTimeout(() => { if(window.updatePaletteFlavor) window.updatePaletteFlavor(id); }, 0);
+    }
     else if (type === 'position') {
         hasIn = true; hasOut = true; title = "POSITION";
         content = `
@@ -616,6 +644,17 @@ window.updateCamFlavor = function(id) {
     };
     flavour(camSel, camFlav);
     flavour(lensSel, lensFlav);
+}
+
+// Style node's preset-library picker — same data-flavor reverse-lookup as
+// updateCamFlavor, kept separate since it drives a single field, not a pair.
+window.updateStylePresetFlavor = function(id) {
+    const sel = document.getElementById(`sty_preset_${id}`);
+    const out = document.getElementById(`sty_preset_flav_${id}`);
+    if(!sel || !out) return;
+    const opt = sel.options[sel.selectedIndex];
+    const f = opt ? opt.getAttribute('data-flavor') : null;
+    out.innerText = f ? '💡 ' + f : '';
 }
 
 // What a node is called when a camera targets it. Single definition — this used

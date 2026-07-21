@@ -24,7 +24,7 @@ window.localStorage.clear();
 
 // One eval so the files share scope, exactly like real <script> tags do
 // (db.js declares `const DB` at top level — separate evals would hide it).
-const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/promptEngine.js', 'js/app.js']
+const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/promptEngine.js', 'js/app.js']
   .map(f => fs.readFileSync(`${ROOT}/${f}`, 'utf8')).join('\n;\n');
 // `const` bindings live in the global lexical scope, not on `window` — re-export
 // the ones the tests need to reach.
@@ -478,6 +478,55 @@ async function main() {
   check('vp pure fn: roughness override', p.roughness <= 0.05, true); // From Finish
   check('vp pure fn: opacity override', p.opacity === 0.85, true); // From Opacity
   check('vp pure fn: energy=None zeroes it', p.emissive === 0, true);
+
+  console.log('\n=== 19. Yeni node tipleri: UI Elements / Graphic Design / Color Palette ===');
+  await preset();
+
+  window.createNode('uielements');
+  const uiId = 'node_' + window.nodeIdCounter;
+  const uiNode = window.nodes[uiId];
+  check('uielements var, kaynak yok/çıkış var', !uiNode.el.querySelector('.socket-wrapper.in')
+    && !!uiNode.el.querySelector('.socket-wrapper.out'), true);
+  check('uielements kategorisi source', uiNode.el.getAttribute('data-cat'), 'source');
+  check('uielements alanları DOM\'da', !!doc.getElementById(`ui_platform_${uiId}`)
+    && !!doc.getElementById(`ui_screen_${uiId}`) && !!doc.getElementById(`ui_note_${uiId}`), true);
+
+  window.createNode('graphicdesign');
+  const gdId = 'node_' + window.nodeIdCounter;
+  const gdNode = window.nodes[gdId];
+  check('graphicdesign var, kaynak yok/çıkış var', !gdNode.el.querySelector('.socket-wrapper.in')
+    && !!gdNode.el.querySelector('.socket-wrapper.out'), true);
+  check('graphicdesign kategorisi source', gdNode.el.getAttribute('data-cat'), 'source');
+  check('graphicdesign alanları DOM\'da', !!doc.getElementById(`gd_artifact_${gdId}`)
+    && !!doc.getElementById(`gd_layout_${gdId}`) && !!doc.getElementById(`gd_note_${gdId}`), true);
+
+  window.createNode('colorpalette');
+  const palId = 'node_' + window.nodeIdCounter;
+  const palNode = window.nodes[palId];
+  check('colorpalette var, kaynak yok/çıkış var', !palNode.el.querySelector('.socket-wrapper.in')
+    && !!palNode.el.querySelector('.socket-wrapper.out'), true);
+  check('colorpalette kategorisi grade', palNode.el.getAttribute('data-cat'), 'grade');
+  check('colorpalette alanları DOM\'da', !!doc.getElementById(`pal_preset_${palId}`)
+    && !!doc.getElementById(`pal_dominance_${palId}`) && !!doc.getElementById(`pal_note_${palId}`), true);
+
+  // Style node: new preset library optgroup field.
+  window.createNode('style');
+  const styId = 'node_' + window.nodeIdCounter;
+  check('style node preset alanı DOM\'da', !!doc.getElementById(`sty_preset_${styId}`), true);
+  const presetSel = doc.getElementById(`sty_preset_${styId}`);
+  check('style preset optgroup dolu (106 kayıt)',
+    presetSel.querySelectorAll('option').length > 100, true);
+
+  // Save/Load roundtrip for the three new node types.
+  doc.getElementById(`ui_platform_${uiId}`).value = 'Smart TV';
+  doc.getElementById(`gd_artifact_${gdId}`).value = 'Album Cover';
+  doc.getElementById(`pal_preset_${palId}`).value = 'Teal & Orange';
+  const wsNew = window.serializeWorkspace();
+  window.loadWorkspace(wsNew);
+  await wait(50);
+  check('uielements platform yüklendi', doc.getElementById(`ui_platform_${uiId}`).value, 'Smart TV');
+  check('graphicdesign artifact yüklendi', doc.getElementById(`gd_artifact_${gdId}`).value, 'Album Cover');
+  check('colorpalette preset yüklendi', doc.getElementById(`pal_preset_${palId}`).value, 'Teal & Orange');
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);

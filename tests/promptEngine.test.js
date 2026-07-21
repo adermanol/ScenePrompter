@@ -14,7 +14,7 @@ global.localStorage = { getItem: () => null, setItem: () => {} };
 // subjects.js defines the SUBJECTS registry that updateStack() reads from.
 // Function declarations leak out of a direct eval, but `const` bindings do not —
 // hence the explicit re-export of the const-declared registry and data tables.
-const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/promptEngine.js']
+const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/promptEngine.js']
   .map(f => fs.readFileSync('c:/Works/Projects/ScenePrompter/' + f, 'utf8'))
   .join('\n;\n');
 eval(SRC + '\n;globalThis.SUBJECTS = SUBJECTS;'
@@ -516,6 +516,131 @@ eq('material (midjourney): tags after host', mjOut.includes('A knight, Liquid Ch
 const gMat = collectInputs('s', matNodes, matCables);
 eq('material: unwraps in collectInputs (host in chars)', gMat.chars.length, 1);
 eq('material: unwraps in collectInputs (mat stored by host id)', gMat.materials['chr'].type, 'Liquid Chrome');
+
+// ---------------------------------------------------------------------------
+// 13. STYLE PRESET LIBRARY (106-entry optgroup on the Style node)
+// ---------------------------------------------------------------------------
+console.log('\n=== Style Preset Library ===');
+
+const spNodes = {
+  s: nodes.s,
+  sp_ch: { id: 'sp_ch', type: 'character', el: { style: { left: '0px' } } },
+  sp_st: { id: 'sp_st', type: 'style', el: { style: { left: '1px' } } },
+};
+const spCables = [{ from: 'sp_ch', to: 's' }, { from: 'sp_st', to: 's' }];
+set('chr_name_sp_ch', 'Robot');
+set('sty_preset_sp_st', '3D Model');
+
+eq('preset flavor joins the sentence',
+  stack('s', 'runway', spNodes, spCables),
+  'Robot, professional 3D render, octane render, cinema4d, high detail, volumetric lighting, ray-traced reflections.');
+
+eq('preset name becomes a midjourney tag',
+  stack('s', 'midjourney', spNodes, spCables),
+  'Robot, 3D Model');
+
+set('sty_preset_sp_st', '');
+eq('unassigned preset: no stray clause', stack('s', 'runway', spNodes, spCables), 'Robot.');
+eq('unassigned preset: no dangling tag', stack('s', 'midjourney', spNodes, spCables), 'Robot');
+
+eq('findStylePreset: unknown name returns falsy', !!findStylePreset('Not A Real Preset'), false);
+eq('findStylePreset: known name resolves its flavor',
+  findStylePreset('Game Voxel Sandbox').flavor,
+  'voxel sandbox game art, blocky cubic terrain, bright flat-shaded surfaces, procedurally-tiled world');
+
+// ---------------------------------------------------------------------------
+// 14. COLOR PALETTE MODULE
+// ---------------------------------------------------------------------------
+console.log('\n=== Color Palette ===');
+
+const palNodes = {
+  s: nodes.s,
+  cp_ch: { id: 'cp_ch', type: 'character', el: { style: { left: '0px' } } },
+  pal: { id: 'pal', type: 'colorpalette', el: { style: { left: '1px' } } },
+};
+const palCables = [{ from: 'cp_ch', to: 's' }, { from: 'pal', to: 's' }];
+set('chr_name_cp_ch', 'Wanderer');
+set('pal_preset_pal', 'Teal & Orange');
+set('pal_dominance_pal', 'Warm-Dominant');
+set('pal_saturation_pal', 'Vivid / Saturated');
+set('pal_accent_pal', 'lime green');
+set('pal_note_pal', 'subtle grain texture');
+
+eq('palette phrase: flavor + dominance/saturation + accent + note',
+  stack('s', 'runway', palNodes, palCables),
+  'Wanderer, a classic cinematic teal-and-orange grade, cool blue-green shadows against warm skin-tone highlights,'
+  + ' warm-dominant, vivid, a lime green accent, subtle grain texture.');
+
+eq('palette midjourney tags', stack('s', 'midjourney', palNodes, palCables),
+  'Wanderer, Teal & Orange, Warm-Dominant, Vivid / Saturated, lime green accent, subtle grain texture');
+
+set('pal_preset_pal', ''); set('pal_dominance_pal', ''); set('pal_saturation_pal', '');
+set('pal_accent_pal', ''); set('pal_note_pal', '');
+eq('unassigned palette: no clause, no stray comma', stack('s', 'runway', palNodes, palCables), 'Wanderer.');
+eq('unassigned palette: no dangling tags', stack('s', 'midjourney', palNodes, palCables), 'Wanderer');
+
+eq('findColorPalette: swatch lookup',
+  findColorPalette('Teal & Orange').swatch,
+  ['#0b3d42', '#1c6e73', '#e8834a', '#f2b26b']);
+eq('findColorPalette: unknown name returns null', findColorPalette('Not A Real Palette'), null);
+
+// ---------------------------------------------------------------------------
+// 15. UI ELEMENTS MODULE
+// ---------------------------------------------------------------------------
+console.log('\n=== UI Elements ===');
+
+const uiNodes = { s: nodes.s, ui: { id: 'ui', type: 'uielements', el: { style: { left: '0px' } } } };
+const uiCables = [{ from: 'ui', to: 's' }];
+set('ui_platform_ui', 'Mobile App');
+set('ui_screen_ui', 'Onboarding Flow');
+set('ui_lang_ui', 'Material Design');
+set('ui_color_ui', 'Dark Mode');
+set('ui_density_ui', 'Card-Based Grid');
+set('ui_state_ui', 'Loading / Skeleton');
+set('ui_note_ui', 'a subtle pull-to-refresh spinner is visible');
+
+eq('UI Elements: full phrase becomes the subject clause',
+  stack('s', 'runway', uiNodes, uiCables),
+  'a dark mode mobile app onboarding flow interface, material design design language, card-based grid layout,'
+  + ' showing a loading / skeleton, a subtle pull-to-refresh spinner is visible.');
+
+eq('UI Elements: midjourney tags', stack('s', 'midjourney', uiNodes, uiCables),
+  'Mobile App, Onboarding Flow, Material Design, Dark Mode, Card-Based Grid, Loading / Skeleton,'
+  + ' a subtle pull-to-refresh spinner is visible');
+
+['platform', 'screen', 'lang', 'color', 'density', 'state', 'note'].forEach(f => set(`ui_${f}_ui`, ''));
+eq('unassigned UI Elements: contributes nothing (placeholder, no node to lean on)',
+  stack('s', 'runway', uiNodes, uiCables), 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
+eq('unassigned UI Elements: no dangling midjourney tags',
+  stack('s', 'midjourney', uiNodes, uiCables), 'Connect nodes to generate Midjourney tags.');
+
+// ---------------------------------------------------------------------------
+// 16. GRAPHIC DESIGN MODULE
+// ---------------------------------------------------------------------------
+console.log('\n=== Graphic Design ===');
+
+const gdNodes = { s: nodes.s, gd: { id: 'gd', type: 'graphicdesign', el: { style: { left: '0px' } } } };
+const gdCables = [{ from: 'gd', to: 's' }];
+set('gd_artifact_gd', 'Poster');
+set('gd_layout_gd', 'Grid-Based');
+set('gd_typography_gd', 'Bold Sans-Serif Display');
+set('gd_palette_gd', 'Neon / Vibrant');
+set('gd_finish_gd', 'Risograph');
+set('gd_note_gd', 'hand-torn paper edge');
+
+eq('Graphic Design: full phrase becomes the subject clause',
+  stack('s', 'runway', gdNodes, gdCables),
+  'a poster, grid-based layout, bold sans-serif display typography, neon / vibrant palette, risograph finish,'
+  + ' hand-torn paper edge.');
+
+eq('Graphic Design: midjourney tags', stack('s', 'midjourney', gdNodes, gdCables),
+  'Poster, Grid-Based, Bold Sans-Serif Display, Neon / Vibrant, Risograph, hand-torn paper edge');
+
+['artifact', 'layout', 'typography', 'palette', 'finish', 'note'].forEach(f => set(`gd_${f}_gd`, ''));
+eq('unassigned Graphic Design: contributes nothing',
+  stack('s', 'runway', gdNodes, gdCables), 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
+eq('unassigned Graphic Design: no dangling midjourney tags',
+  stack('s', 'midjourney', gdNodes, gdCables), 'Connect nodes to generate Midjourney tags.');
 
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);
