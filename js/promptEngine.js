@@ -147,7 +147,7 @@ function collectInputs(sid, nodes, cables) {
         scene: null, style: null, chars: [], objects: [], lights: [], camera: null,
         render: null, shot: null, move: null, atmos: null, color: null, comp: null,
         neg: null, subjects: [], customLoc: null, positions: {}, materials: {},
-        uiElements: [], graphicDesign: [], colorPalette: null,
+        uiElements: [], graphicDesign: [], colorPalette: null, productShot: null,
     };
     // Position and Material nodes are a special case. They don't connect to the stack,
     // they connect to the subject they modify. We must scan ALL cables.
@@ -182,6 +182,7 @@ function collectInputs(sid, nodes, cables) {
             case 'neg': g.neg = n; break;
             case 'uielements': g.uiElements.push(n); break;
             case 'graphicdesign': g.graphicDesign.push(n); break;
+            case 'productshot': g.productShot = n; break;
         }
     });
     return g;
@@ -326,10 +327,16 @@ function buildComposition(g) {
     // clause exactly like a character or object would.
     g.uiElements.forEach(n => { const p = uiElementsPhrase(readUiElements(n.id)); if (p) sArr.push(p); });
     g.graphicDesign.forEach(n => { const p = graphicDesignPhrase(readGraphicDesign(n.id)); if (p) sArr.push(p); });
+    // A Product Shot's subject/set/style clause joins the frame contents too.
+    if (g.productShot) { const p = productShotPhrase(readProductShot(g.productShot.id)); if (p) sArr.push(p); }
     if (sArr.length) { subj = sArr.join(' and '); act = aArr.join(' while '); }
 
+    // Lighting clause — Light nodes and the Product Shot's named lighting recipe
+    // both feed one `litParts` list. With no Product Shot node the output is
+    // byte-for-byte what it was before (existing platform snapshots lock this).
+    const litParts = [];
     if (g.lights.length) {
-        const lstr = g.lights.map(l => {
+        g.lights.forEach(l => {
             const id = l.id;
             if (val(`mode_${id}`) === 'industrial') {
                 const mod = val(`lit_mod_${id}`), gel = val(`lit_gel_${id}`), brand = val(`brand_${id}`);
@@ -337,12 +344,14 @@ function buildComposition(g) {
                 let s = `illuminated by a ${fixture} studio light`;
                 if (mod && mod !== 'Bare Bulb') s += ` with a ${mod.toLowerCase()}`;
                 if (gel && gel !== 'None') s += ` using a ${gel.toLowerCase()} gel`;
-                return s;
+                litParts.push(s);
+            } else {
+                litParts.push(`lit by natural sunlight at ${val(`time_${id}`)}:00`);
             }
-            return `lit by natural sunlight at ${val(`time_${id}`)}:00`;
-        }).filter(Boolean);
-        if (lstr.length) lit += lstr.join(', ') + '. ';
+        });
     }
+    if (g.productShot) { const p = productLightPhrase(readProductShot(g.productShot.id)); if (p) litParts.push(p); }
+    if (litParts.length) lit += litParts.join(', ') + '. ';
 
     if (g.atmos) {
         const fx = val(`atm_fx_${g.atmos.id}`);
@@ -378,6 +387,13 @@ function buildComposition(g) {
             if (advDist) a += `, maintaining a ${advDist}`;
             cam += `. The camera is ${a}`;
         }
+    }
+    // Product Shot owns the camera clause ONLY when there is no Camera node —
+    // otherwise two sources would write conflicting optics into one sentence
+    // (lint flags that case).
+    if (g.productShot && !g.camera) {
+        const o = productOpticsPhrase(readProductShot(g.productShot.id));
+        if (o) cam = cap(o);
     }
 
     if (g.style || g.color || g.comp || g.colorPalette) {
@@ -489,6 +505,7 @@ function buildMidjourneyTags(c, g) {
     g.objects.forEach(o => add(val(`val_${o.id}`)));
     g.uiElements.forEach(n => uiElementsTags(readUiElements(n.id)).forEach(t => tags.push(t)));
     g.graphicDesign.forEach(n => graphicDesignTags(readGraphicDesign(n.id)).forEach(t => tags.push(t)));
+    if (g.productShot) productShotTags(readProductShot(g.productShot.id)).forEach(t => tags.push(t));
     if (g.atmos) add(val(`atm_fx_${g.atmos.id}`));
     if (g.style) {
         const id = g.style.id;
@@ -696,6 +713,13 @@ function lintScene(g) {
     const daylitSun = g.lights.some(l =>
         val(`mode_${l.id}`) === 'sunlight' && +val(`time_${l.id}`) > 6 && +val(`time_${l.id}`) < 19);
     if (isNight && daylitSun) w.push('Scene is night but a sun light is set to a daytime hour');
+
+    if (g.productShot && g.camera) {
+        const ps = readProductShot(g.productShot.id);
+        if (ps.lens || ps.dof || ps.dist) {
+            w.push('Product Shot optics are ignored because a Camera node is connected');
+        }
+    }
 
     if (wea === 'Clear' && /Rain|Snow|Fog/.test(atmos)) {
         w.push(`Weather is "Clear" but atmosphere is "${atmos}"`);

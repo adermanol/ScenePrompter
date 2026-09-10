@@ -514,4 +514,130 @@ const DB = {
     gdTypography: ["Bold Sans-Serif Display", "Elegant Serif Editorial", "Hand-Lettered Script", "Brutalist Mono", "Art Deco Lettering", "Graffiti Lettering", "Minimalist Geometric", "Vintage Condensed", "Kinetic / Variable Type"],
     gdPalette: ["Duotone", "High-Contrast B&W", "Pastel", "Corporate Brand Colors", "Riso-Print Limited Palette", "Neon / Vibrant", "Earthy / Organic", "Monochrome + Accent"],
     gdFinish: ["Matte Print", "Glossy Print", "Screen-Printed Texture", "Embossed / Foil-Stamped", "Risograph", "Digital-Flat", "Vintage Halftone", "Letterpress"],
+
+    // --- PRODUCT SHOT ---
+    // Studio product photography as a first-class module. Two research axes drive
+    // the "setup tuned to the product" promise:
+    //   1. surface behaviour  -> lighting recipe   (DB.productLightRecipes)
+    //   2. product size        -> optics recipe     (DB.productOpticsRecipes)
+    // Every productCategories entry carries its own {surface, size} keys so
+    // recommendFor() (js/productshot.js) can join both tables into one recipe.
+    // optgroup+flavor picker, exactly like DB.stylePresets / DB.colorPalettes.
+    productCategories: [
+        { key: 'reflective', label: 'Reflective / Metallic', items: [
+            { name: 'Fine Jewelry / Ring', surface: 'reflective', size: 'miniature', flavor: 'polished precious metal and faceted gemstones, mirror-bright micro-surfaces' },
+            { name: 'Wristwatch', surface: 'reflective', size: 'small', flavor: 'brushed and polished steel case, curved sapphire crystal, metallic bracelet' },
+            { name: 'Cutlery / Flatware', surface: 'reflective', size: 'small', flavor: 'mirror-polished stainless steel, long specular highlights' },
+            { name: 'Chrome Hardware / Faucet', surface: 'reflective', size: 'medium', flavor: 'chrome-plated fixture, wraparound mirror reflections' },
+            { name: 'Metal Cookware / Pan', surface: 'reflective', size: 'medium', flavor: 'stainless or copper cookware, broad curved reflective body' },
+            { name: 'Aluminum Laptop / Device Shell', surface: 'reflective', size: 'small', flavor: 'anodized aluminum unibody, soft satin-metal sheen' },
+        ]},
+        { key: 'transparent', label: 'Transparent / Glass', items: [
+            { name: 'Perfume Bottle', surface: 'transparent', size: 'small', flavor: 'faceted glass flacon, refractive and liquid-filled, heavy crystal base' },
+            { name: 'Wine / Spirits Bottle', surface: 'transparent', size: 'small', flavor: 'coloured glass bottle, dark liquid, printed and foiled label' },
+            { name: 'Drinkware / Glass Tumbler', surface: 'transparent', size: 'small', flavor: 'clear thin-walled glass, bright refractive edges' },
+            { name: 'Serum / Dropper Bottle', surface: 'transparent', size: 'small', flavor: 'frosted or clear glass vial, translucent liquid, pipette cap' },
+            { name: 'Eyewear / Sunglasses', surface: 'transparent', size: 'small', flavor: 'transparent lenses and glossy acetate frame, subtle tinted glass' },
+            { name: 'Clear Plastic Packaging', surface: 'transparent', size: 'small', flavor: 'moulded transparent PET, soft internal reflections' },
+        ]},
+        { key: 'glossy', label: 'Glossy / Molded', items: [
+            { name: 'Cosmetic Compact / Lipstick', surface: 'glossy', size: 'miniature', flavor: 'glossy lacquered case, curved reflective body, crisp brand foil' },
+            { name: 'Skincare Jar / Tube', surface: 'glossy', size: 'small', flavor: 'smooth matte-to-glossy plastic, soft curved highlights' },
+            { name: 'Smartphone', surface: 'glossy', size: 'small', flavor: 'glass front and back, polished metal frame, edge-lit reflections' },
+            { name: 'Headphones / Earbuds', surface: 'glossy', size: 'small', flavor: 'moulded glossy plastic and soft-touch finish, compact curves' },
+            { name: 'Small Appliance', surface: 'glossy', size: 'medium', flavor: 'glossy moulded housing, mixed plastic and chrome trim' },
+            { name: 'Automotive Body Panel', surface: 'glossy', size: 'oversized', flavor: 'deep metallic clearcoat paint, sweeping reflective curves' },
+        ]},
+        { key: 'matte', label: 'Matte / Textured', items: [
+            { name: 'Leather Goods / Wallet', surface: 'matte', size: 'small', flavor: 'grained leather, visible stitching, soft matte surface' },
+            { name: 'Sneaker / Footwear', surface: 'matte', size: 'medium', flavor: 'mixed textile, suede and rubber, structured form' },
+            { name: 'Ceramic Mug / Vase', surface: 'matte', size: 'small', flavor: 'matte glazed ceramic, subtle surface irregularity' },
+            { name: 'Paper Packaging / Box', surface: 'matte', size: 'small', flavor: 'uncoated kraft or matte-laminate carton, crisp folded edges' },
+            { name: 'Textile / Folded Fabric', surface: 'matte', size: 'medium', flavor: 'woven fabric, soft directional pile, gentle drape' },
+            { name: 'Wooden Object / Utensil', surface: 'matte', size: 'small', flavor: 'oiled wood grain, warm matte finish' },
+            { name: 'Book / Stationery', surface: 'matte', size: 'small', flavor: 'matte cover stock, clean printed type, sharp corners' },
+        ]},
+        { key: 'food', label: 'Food & Beverage', items: [
+            { name: 'Plated Dish', surface: 'food', size: 'medium', flavor: 'freshly plated food, glistening sauce, natural steam and texture' },
+            { name: 'Beverage in Glass', surface: 'food', size: 'small', flavor: 'poured drink with condensation, ice, backlit liquid glow' },
+            { name: 'Packaged Snack / Bar', surface: 'food', size: 'small', flavor: 'foil or paper wrapper, product hero cut-open reveal' },
+            { name: 'Fresh Produce', surface: 'food', size: 'small', flavor: 'raw fruit or vegetable, dewy skin, natural blemish detail' },
+            { name: 'Baked Goods', surface: 'food', size: 'small', flavor: 'crumb texture, golden crust, soft flour dusting' },
+            { name: 'Coffee / Hot Drink', surface: 'food', size: 'small', flavor: 'crema surface, rising steam, ceramic cup' },
+        ]},
+        { key: 'apparel', label: 'Apparel & Soft Goods', items: [
+            { name: 'Garment (flat lay)', surface: 'apparel', size: 'medium', flavor: 'steamed garment laid flat, even weave, true fabric colour' },
+            { name: 'Garment (on model)', surface: 'apparel', size: 'large', flavor: 'garment worn on a model, natural fall and fit' },
+            { name: 'Garment (ghost mannequin)', surface: 'apparel', size: 'large', flavor: 'hollow-form garment holding its shape, invisible mannequin' },
+            { name: 'Handbag / Accessory', surface: 'apparel', size: 'medium', flavor: 'structured bag holding form, hardware and grain detail' },
+            { name: 'Hat / Headwear', surface: 'apparel', size: 'small', flavor: 'shaped headwear, crown and brim structure' },
+            { name: 'Scarf / Soft Accessory', surface: 'apparel', size: 'medium', flavor: 'draped soft textile, flowing folds' },
+        ]},
+        { key: 'hardgoods', label: 'Large / Hard Goods', items: [
+            { name: 'Sofa / Upholstered Furniture', surface: 'matte', size: 'large', flavor: 'upholstered frame, fabric texture, structural silhouette' },
+            { name: 'Chair / Table', surface: 'matte', size: 'large', flavor: 'wood, metal or moulded form, clean structural lines' },
+            { name: 'Large Appliance', surface: 'glossy', size: 'large', flavor: 'painted or stainless panel, tall boxy form, subtle reflections' },
+            { name: 'Bicycle / Sports Equipment', surface: 'glossy', size: 'large', flavor: 'painted frame, mixed metal and rubber, open geometry' },
+            { name: 'Furniture Set / Room Vignette', surface: 'matte', size: 'oversized', flavor: 'styled group of furniture in a set, cohesive palette' },
+            { name: 'Vehicle (full)', surface: 'glossy', size: 'oversized', flavor: 'full car or motorcycle, metallic paint, chrome and glass' },
+        ]},
+    ],
+    // 18 named lighting recipes. flavor is the sentence that lands verbatim in the
+    // prompt's `lit` clause.
+    productLightSetups: [
+        { key: 'technical', label: 'Technical / E-commerce', items: [
+            { name: 'Three-Point', flavor: 'lit with a classic three-point setup, a soft key at 45 degrees, a gentle fill opposite, and a rim light separating the product from the background' },
+            { name: 'High Key Shadowless', flavor: 'lit high-key and almost shadowless, broad diffused light wrapping the product against a pure white background' },
+            { name: 'Light Tent Diffused', flavor: 'lit inside a light tent, fully enveloping diffusion erasing hotspots and hard reflections on the surface' },
+            { name: 'Bright Field Backlight', flavor: 'lit bright-field, a large illuminated white panel behind the product rendering the glass and edges as bright translucent tone' },
+            { name: 'Dark Field', flavor: 'lit dark-field, twin strip softboxes raking from behind and the sides against a black ground so only the bright refractive edges of the glass glow' },
+            { name: 'Ring Light Frontal', flavor: 'lit with an on-axis ring light, even frontal fill and a circular catchlight, minimal shadow' },
+        ]},
+        { key: 'commercial', label: 'Commercial / Hero', items: [
+            { name: 'Clamshell', flavor: 'lit clamshell, one soft source high and one low filling from beneath, smooth gradient across the surface and a bright catchlight' },
+            { name: 'Gradient Reflection', flavor: 'lit with gradient reflection mapping, a white-to-black card curved around the product casting one sweeping highlight that reveals its form' },
+            { name: 'Two-Strip Edge', flavor: 'lit with two vertical strip softboxes at the sides, crisp parallel edge highlights defining the silhouette' },
+            { name: 'Rim / Kicker Silhouette', flavor: 'lit mostly from behind with hard kicker lights, a bright outline carving the product off a dark background' },
+            { name: 'Overhead Top-Light', flavor: 'lit from a single large overhead softbox, clean top-down highlight and a soft grounded shadow' },
+            { name: 'Colored Gel Duotone', flavor: 'lit with two gelled sources of contrasting colour, a warm and a cool wash meeting across the product' },
+        ]},
+        { key: 'editorial', label: 'Editorial / Atmospheric', items: [
+            { name: 'Low Key Chiaroscuro', flavor: 'lit low-key, a single hard source and deep falloff, dramatic sculpted shadow and one carved highlight' },
+            { name: 'Window Directional Soft', flavor: 'lit as if by a large north-facing window, soft directional daylight and a long gentle shadow' },
+            { name: 'Hard Sun Graphic Shadow', flavor: 'lit by a single hard undiffused source, a sharp graphic shadow thrown across the surface' },
+            { name: 'Backlit Translucent Glow', flavor: 'lit from directly behind, the product glowing translucent with a warm halo of light around it' },
+            { name: 'Splash Freeze Flash', flavor: 'lit with a short hard flash burst freezing liquid mid-splash, crisp droplets and motion' },
+            { name: 'Practical In-Situ', flavor: 'lit by visible practical lights in the set, motivated ambient glow and natural falloff' },
+        ]},
+    ],
+    productSurfaces: ["Seamless White Sweep", "Seamless Black Sweep", "Seamless Colored Sweep", "White Acrylic (reflective)", "Black Acrylic (reflective)", "Mirror Surface", "Polished Marble", "Raw Concrete", "Weathered Wood", "Linen / Fabric Drape", "Sand", "Water Surface", "Floating / Suspended in Air", "Raised Plinth / Pedestal", "Natural Stone Slab", "Glass Riser", "Gradient Backdrop", "In-Context Set Dressing"],
+    productBackdrops: ["Pure White (#fff)", "Soft Grey Gradient", "Deep Black", "Brand Color Wash", "Warm Beige / Sand", "Cool Blue Studio", "Pastel Tone", "Textured Plaster Wall", "Blurred Lifestyle Bokeh", "Matching Tonal (product color)"],
+    productShotStyles: ["Hero Packshot", "E-commerce Cutout", "Three-Quarter Angle", "Straight-On Front", "Top-Down Flat Lay", "Knolling (aligned layout)", "Macro Detail Crop", "360 Turntable Frame", "Floating / Levitating", "Splash / Liquid Action", "Exploded / Disassembled View", "Group Lineup", "In-Use Lifestyle", "On-Model", "Ghost Mannequin", "Scale Reference", "Unboxing / Reveal", "Texture Study"],
+    productFinish: ["As-is / Natural", "High-Gloss Retouched", "Matte Retouched", "Wet / Fresh Droplets", "Frosted / Chilled", "Dust-Free Clinical", "Softly Aged / Patina", "Powder / Ingredient Scatter", "Steam / Vapor", "Backlit Rim Glow"],
+    productShadow: ["Contact Shadow Only", "Soft Diffused Shadow", "Hard Directional Shadow", "Long Dramatic Shadow", "No Shadow (floating)", "Natural Grounded Shadow", "Reflection Instead of Shadow", "Dappled / Gobo Shadow", "Double Shadow (two sources)"],
+    productMood: ["Clean & Clinical", "Luxury & Opulent", "Warm & Inviting", "Bold & Graphic", "Natural & Organic", "Playful & Vibrant", "Moody & Dramatic", "Minimal & Editorial", "Tech & Futuristic"],
+    productProps: ["None", "Ingredient / Raw Material", "Complementary Product", "Natural Elements (leaves, stone)", "Fabric / Textile", "Packaging Box", "Scattered Petals", "Water Droplets / Splash", "Geometric Blocks / Risers", "Hands Interacting", "Everyday Context Objects", "Seasonal Decor"],
+    productSizes: ["Miniature (jewelry, coin)", "Small (bottle, phone, cosmetic)", "Medium (bag, shoe, cookware)", "Large (furniture, appliance)", "Oversized (vehicle, room set)"],
+    productLens: ["100mm Macro", "85mm Short Tele", "50mm Standard", "35mm Wide-Normal", "24mm Wide (tilt-shift)", "120mm Tele", "70mm Normal", "Phone-style Wide"],
+    productDof: ["f/2.8 — Shallow", "f/4 — Soft", "f/5.6 — Moderate", "f/8 — Balanced", "f/11 — Sharp", "f/16 — Deep", "Focus-stacked — Full sharpness"],
+    productDistance: ["Extreme close (~20cm)", "Close (~50cm)", "Medium (~1.5m)", "Far (~3m)", "Very far (~6m+)", "Whatever frames the product"],
+    productLightChar: ["Very Soft / Wrapped", "Soft Directional", "Crisp / Defined", "Hard / Punchy", "Even / Flat", "High-Contrast", "Warm (tungsten)", "Cool (daylight)"],
+    // surface key -> {light, ground, shadow}. The lighting half of recommendFor().
+    productLightRecipes: {
+        transparent: { light: 'Dark Field',           ground: 'Black Acrylic (reflective)', shadow: 'Reflection Instead of Shadow' },
+        reflective:  { light: 'Light Tent Diffused',   ground: 'White Acrylic (reflective)', shadow: 'Contact Shadow Only' },
+        glossy:      { light: 'Gradient Reflection',   ground: 'Seamless White Sweep',       shadow: 'Soft Diffused Shadow' },
+        matte:       { light: 'Three-Point',           ground: 'Seamless White Sweep',       shadow: 'Natural Grounded Shadow' },
+        food:        { light: 'Window Directional Soft', ground: 'Weathered Wood',           shadow: 'Soft Diffused Shadow' },
+        apparel:     { light: 'High Key Shadowless',   ground: 'Seamless White Sweep',       shadow: 'Contact Shadow Only' },
+        hardgoods:   { light: 'Three-Point',           ground: 'Seamless Colored Sweep',     shadow: 'Natural Grounded Shadow' },
+    },
+    // size key -> {lens, dof, dist}. The optics half of recommendFor().
+    productOpticsRecipes: {
+        miniature: { lens: '100mm Macro',    dof: 'Focus-stacked — Full sharpness', dist: 'Extreme close (~20cm)' },
+        small:     { lens: '100mm Macro',    dof: 'f/8 — Balanced',                 dist: 'Close (~50cm)' },
+        medium:    { lens: '85mm Short Tele', dof: 'f/8 — Balanced',                dist: 'Medium (~1.5m)' },
+        large:     { lens: '50mm Standard',  dof: 'f/11 — Sharp',                   dist: 'Far (~3m)' },
+        oversized: { lens: '24mm Wide (tilt-shift)', dof: 'f/8 — Balanced',         dist: 'Very far (~6m+)' },
+    },
 };

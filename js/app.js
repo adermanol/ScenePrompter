@@ -140,7 +140,7 @@ const UNSET_LABEL = '— unassigned';
 // creates can never disagree about what colour they are.
 // ---------------------------------------------------------------------------
 const CATEGORIES = {
-    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render', 'uielements', 'graphicdesign'] },
+    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render', 'uielements', 'graphicdesign', 'productshot'] },
     subject: { label: 'SUBJECT', types: ['character', 'object'] },   // + registry subjects
     light:   { label: 'LIGHT',   types: ['light', 'atmos'] },
     camera:  { label: 'CAMERA',  types: ['camera', 'shot', 'cammove', 'position'] },
@@ -499,6 +499,11 @@ window.createNode = function(type) {
         hasIn = false; hasOut = true; title = "COLOR PALETTE";
         content = buildColorPaletteHTML(id);
         setTimeout(() => { if(window.updatePaletteFlavor) window.updatePaletteFlavor(id); }, 0);
+    }
+    else if (type === 'productshot') {
+        hasIn = false; hasOut = true; title = "PRODUCT SHOT";
+        content = buildProductShotHTML(id);
+        setTimeout(() => { if(window.updateProductFlavor) window.updateProductFlavor(id); }, 0);
     }
     else if (type === 'position') {
         hasIn = true; hasOut = true; title = "POSITION";
@@ -1270,6 +1275,26 @@ const PRESETS = {
             { type: 'stack', x: 850, y: 300 },
         ],
         connect: [[0, 7], [1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7]],
+    },
+    productPerfume: {
+        label: 'Product — Perfume Dark Field',
+        nodes: [
+            // Dark-field recipe for a transparent product: black acrylic, twin
+            // strip lights raking from behind, only the refractive edges glow.
+            { type: 'productshot', x: 100, y: 120, values: {
+                pr_category: 'Perfume Bottle', pr_size: 'Small (bottle, phone, cosmetic)',
+                pr_surface: 'Black Acrylic (reflective)', pr_backdrop: 'Deep Black',
+                pr_light: 'Dark Field', pr_lightchar: 'Crisp / Defined',
+                pr_shadow: 'Reflection Instead of Shadow', pr_style: 'Hero Packshot',
+                pr_finish: 'High-Gloss Retouched', pr_mood: 'Luxury & Opulent' } },
+            { type: 'camera', x: 480, y: 120, values: {
+                cam: 'Alexa Mini LF', lens: 'Master Primes',
+                mm_in: '100', mm_sl: '100', cam_ap: 'f/8.0' } },
+            { type: 'colorg', x: 480, y: 460, values: {
+                col_con: 'Punchy', col_sat: 'Rich' } },
+            { type: 'stack', x: 860, y: 260 },
+        ],
+        connect: [[0, 3], [1, 3], [2, 3]],
     },
 };
 

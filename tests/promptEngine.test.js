@@ -14,7 +14,7 @@ global.localStorage = { getItem: () => null, setItem: () => {} };
 // subjects.js defines the SUBJECTS registry that updateStack() reads from.
 // Function declarations leak out of a direct eval, but `const` bindings do not —
 // hence the explicit re-export of the const-declared registry and data tables.
-const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/promptEngine.js']
+const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/productshot.js', 'js/promptEngine.js']
   .map(f => fs.readFileSync('c:/Works/Projects/ScenePrompter/' + f, 'utf8'))
   .join('\n;\n');
 eval(SRC + '\n;globalThis.SUBJECTS = SUBJECTS;'
@@ -641,6 +641,83 @@ eq('unassigned Graphic Design: contributes nothing',
   stack('s', 'runway', gdNodes, gdCables), 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
 eq('unassigned Graphic Design: no dangling midjourney tags',
   stack('s', 'midjourney', gdNodes, gdCables), 'Connect nodes to generate Midjourney tags.');
+
+// ---------------------------------------------------------------------------
+// 17. PRODUCT SHOT MODULE
+// ---------------------------------------------------------------------------
+console.log('\n=== Product Shot ===');
+
+const prNodes = { s: nodes.s, pr: { id: 'pr', type: 'productshot', el: { style: { left: '0px' } } } };
+const prCables = [{ from: 'pr', to: 's' }];
+const prFields = ['size', 'surface', 'backdrop', 'lightchar', 'shadow', 'lens', 'dof', 'dist', 'style', 'finish', 'mood', 'props'];
+const setPr = () => {
+  set('pr_category_pr', 'Perfume Bottle');
+  set('pr_name_pr', ''); set('pr_note_pr', '');
+  set('pr_light_pr', 'Dark Field');
+  set('pr_size_pr', ''); set('pr_surface_pr', 'Black Acrylic (reflective)');
+  set('pr_backdrop_pr', 'Deep Black'); set('pr_lightchar_pr', 'Crisp / Defined');
+  set('pr_shadow_pr', 'Reflection Instead of Shadow'); set('pr_lens_pr', '100mm Macro');
+  set('pr_dof_pr', 'f/8 — Balanced'); set('pr_dist_pr', 'Close (~50cm)');
+  set('pr_style_pr', 'Hero Packshot'); set('pr_finish_pr', 'High-Gloss Retouched');
+  set('pr_mood_pr', 'Luxury & Opulent'); set('pr_props_pr', 'None');
+};
+setPr();
+
+eq('product shot: subject + lit + optics land as separate clauses',
+  stack('s', 'runway', prNodes, prCables),
+  'a faceted glass flacon, refractive and liquid-filled, heavy crystal base, on black acrylic,'
+  + ' against a deep black background, shot as a hero packshot, high-gloss retouched, luxury & opulent mood,'
+  + ' lit dark-field, twin strip softboxes raking from behind and the sides against a black ground so only the'
+  + ' bright refractive edges of the glass glow, crisp light, reflection instead of shadow,'
+  + ' Shot on a 100mm macro lens at f/8, from a close working distance.');
+
+eq('product shot: midjourney tags', stack('s', 'midjourney', prNodes, prCables),
+  'Perfume Bottle, Black Acrylic (reflective), Deep Black, Dark Field, Crisp / Defined,'
+  + ' Reflection Instead of Shadow, 100mm Macro, f/8 — Balanced, Close (~50cm), Hero Packshot,'
+  + ' High-Gloss Retouched, Luxury & Opulent');
+
+// Camera node connected → Product Shot optics drop out, Camera owns `cam`.
+const prCamNodes = { ...prNodes, cam: { id: 'cam', type: 'camera', el: { style: { left: '1px' } } } };
+const prCamCables = [{ from: 'pr', to: 's' }, { from: 'cam', to: 's' }];
+setPr();
+set('cam_cam', 'Alexa Mini LF'); set('lens_cam', ''); set('mm_in_cam', '');
+const camOut = stack('s', 'runway', prCamNodes, prCamCables);
+eq('product shot: Camera node wins the cam clause', camOut.includes('Shot on Alexa Mini LF'), true);
+eq('product shot: optics phrase suppressed when Camera present', camOut.includes('100mm macro lens'), false);
+eq('product shot: lint warns optics ignored',
+  lintScene(collectInputs('s', prCamNodes, prCamCables)).some(x => x.includes('Product Shot optics are ignored')), true);
+
+// Unassigned contract: connected node, nothing chosen → nothing said.
+prFields.concat(['category', 'light', 'name', 'note']).forEach(f => set(`pr_${f}_pr`, ''));
+eq('unassigned product shot: no cinematic clause',
+  stack('s', 'runway', prNodes, prCables), 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
+eq('unassigned product shot: no dangling tags',
+  stack('s', 'midjourney', prNodes, prCables), 'Connect nodes to generate Midjourney tags.');
+
+// lit regression lock: a plain sunlight Light node, no Product Shot.
+const litNode = { s: nodes.s, l: { id: 'l', type: 'light', el: { style: { left: '0px' } } }, c: pf.sc };
+const litCab = [{ from: 'l', to: 's' }, { from: 'c', to: 's' }];
+set('mode_l', 'sunlight'); set('time_l', '15');
+eq('lit refactor is behaviour-preserving (sunlight)',
+  stack('s', 'runway', litNode, litCab).includes('lit by natural sunlight at 15:00.'), true);
+
+// recommendFor: the two research tables joined.
+eq('recommendFor: transparent+small → dark field + 100mm macro',
+  recommendFor('Perfume Bottle'),
+  { light: 'Dark Field', ground: 'Black Acrylic (reflective)', shadow: 'Reflection Instead of Shadow',
+    lens: '100mm Macro', dof: 'f/8 — Balanced', dist: 'Close (~50cm)' });
+eq('recommendFor: matte+large sofa → three-point + 50mm f/11',
+  recommendFor('Sofa / Upholstered Furniture'),
+  { light: 'Three-Point', ground: 'Seamless White Sweep', shadow: 'Natural Grounded Shadow',
+    lens: '50mm Standard', dof: 'f/11 — Sharp', dist: 'Far (~3m)' });
+eq('recommendFor: size override wins over category size',
+  recommendFor('Perfume Bottle', 'Miniature (jewelry, coin)').lens, '100mm Macro');
+eq('recommendFor: size override changes dof to focus-stacked',
+  recommendFor('Perfume Bottle', 'Miniature (jewelry, coin)').dof, 'Focus-stacked — Full sharpness');
+eq('recommendFor: unknown category returns null', recommendFor('Not A Product'), null);
+eq('findProductLightSetup: known name resolves flavor',
+  typeof findProductLightSetup('Dark Field').flavor, 'string');
+eq('findProductLightSetup: unknown returns null', findProductLightSetup('Nope'), null);
 
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);

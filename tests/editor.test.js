@@ -24,7 +24,7 @@ window.localStorage.clear();
 
 // One eval so the files share scope, exactly like real <script> tags do
 // (db.js declares `const DB` at top level — separate evals would hide it).
-const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/promptEngine.js', 'js/app.js']
+const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/productshot.js', 'js/promptEngine.js', 'js/app.js']
   .map(f => fs.readFileSync(`${ROOT}/${f}`, 'utf8')).join('\n;\n');
 // `const` bindings live in the global lexical scope, not on `window` — re-export
 // the ones the tests need to reach.
@@ -517,16 +517,39 @@ async function main() {
   check('style preset optgroup dolu (106 kayıt)',
     presetSel.querySelectorAll('option').length > 100, true);
 
-  // Save/Load roundtrip for the three new node types.
+  // Product Shot node.
+  window.createNode('productshot');
+  const prId = 'node_' + window.nodeIdCounter;
+  const prNode = window.nodes[prId];
+  check('productshot var, kaynak yok/çıkış var', !prNode.el.querySelector('.socket-wrapper.in')
+    && !!prNode.el.querySelector('.socket-wrapper.out'), true);
+  check('productshot kategorisi source', prNode.el.getAttribute('data-cat'), 'source');
+  check('productshot alanları DOM\'da', !!doc.getElementById(`pr_category_${prId}`)
+    && !!doc.getElementById(`pr_light_${prId}`) && !!doc.getElementById(`pr_lens_${prId}`)
+    && !!doc.getElementById(`pr_note_${prId}`), true);
+
+  // [Apply] fills the six recommended selects from the category.
+  doc.getElementById(`pr_category_${prId}`).value = 'Perfume Bottle';
+  window.applyProductSetup(prId);
+  check('applyProductSetup: SETUP dolduruldu', doc.getElementById(`pr_light_${prId}`).value, 'Dark Field');
+  check('applyProductSetup: LENS dolduruldu', doc.getElementById(`pr_lens_${prId}`).value, '100mm Macro');
+  check('applyProductSetup: SHADOW dolduruldu',
+    doc.getElementById(`pr_shadow_${prId}`).value, 'Reflection Instead of Shadow');
+
+  // Save/Load roundtrip for the new node types.
   doc.getElementById(`ui_platform_${uiId}`).value = 'Smart TV';
   doc.getElementById(`gd_artifact_${gdId}`).value = 'Album Cover';
   doc.getElementById(`pal_preset_${palId}`).value = 'Teal & Orange';
+  doc.getElementById(`pr_category_${prId}`).value = 'Wristwatch';
+  doc.getElementById(`pr_mood_${prId}`).value = 'Tech & Futuristic';
   const wsNew = window.serializeWorkspace();
   window.loadWorkspace(wsNew);
   await wait(50);
   check('uielements platform yüklendi', doc.getElementById(`ui_platform_${uiId}`).value, 'Smart TV');
   check('graphicdesign artifact yüklendi', doc.getElementById(`gd_artifact_${gdId}`).value, 'Album Cover');
   check('colorpalette preset yüklendi', doc.getElementById(`pal_preset_${palId}`).value, 'Teal & Orange');
+  check('productshot category yüklendi', doc.getElementById(`pr_category_${prId}`).value, 'Wristwatch');
+  check('productshot mood yüklendi', doc.getElementById(`pr_mood_${prId}`).value, 'Tech & Futuristic');
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);
