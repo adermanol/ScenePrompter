@@ -649,7 +649,7 @@ console.log('\n=== Product Shot ===');
 
 const prNodes = { s: nodes.s, pr: { id: 'pr', type: 'productshot', el: { style: { left: '0px' } } } };
 const prCables = [{ from: 'pr', to: 's' }];
-const prFields = ['size', 'surface', 'backdrop', 'lightchar', 'shadow', 'lens', 'dof', 'dist', 'style', 'finish', 'mood', 'props'];
+const prFields = ['size', 'surface', 'backdrop', 'pattern', 'bgcolor', 'lightchar', 'shadow', 'lens', 'dof', 'dist', 'style', 'finish', 'mood', 'props'];
 const setPr = () => {
   set('pr_category_pr', 'Perfume Bottle');
   set('pr_name_pr', ''); set('pr_note_pr', '');
@@ -686,6 +686,19 @@ eq('product shot: Camera node wins the cam clause', camOut.includes('Shot on Ale
 eq('product shot: optics phrase suppressed when Camera present', camOut.includes('100mm macro lens'), false);
 eq('product shot: lint warns optics ignored',
   lintScene(collectInputs('s', prCamNodes, prCamCables)).some(x => x.includes('Product Shot optics are ignored')), true);
+
+// Custom backdrop colour + pattern land in the set clause.
+setPr();
+set('pr_backdrop_pr', ''); set('pr_bgcolor_pr', 'dusty terracotta'); set('pr_pattern_pr', 'Terrazzo Speckle');
+const bgOut = stack('s', 'runway', prNodes, prCables);
+eq('product shot: custom backdrop colour in the set clause',
+  bgOut.includes('against a dusty terracotta background'), true);
+eq('product shot: backdrop pattern in the set clause',
+  bgOut.includes('the backdrop carrying a terrazzo speckle pattern'), true);
+eq('product shot: pattern "None" contributes nothing', (() => {
+  set('pr_pattern_pr', 'None / Plain');
+  return stack('s', 'runway', prNodes, prCables).includes('pattern');
+})(), false);
 
 // Unassigned contract: connected node, nothing chosen → nothing said.
 prFields.concat(['category', 'light', 'name', 'note']).forEach(f => set(`pr_${f}_pr`, ''));

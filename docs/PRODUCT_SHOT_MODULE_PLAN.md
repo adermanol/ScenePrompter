@@ -60,6 +60,10 @@ Makro ve geniş açı büyük ürünlerde distorsiyon yapar; uzaktan zoom tercih
 
 **`lit` refactor:** eski `g.lights.map(...)` bloğu bir `litParts` dizisi kuracak şekilde düzenlendi; Product Shot yokken çıktı byte-for-byte aynı (mevcut platform snapshot'ları bunu kilitliyor — sıfır regresyon doğrulandı).
 
+### Arka plan: renk + pattern
+
+SET bölümünde `BACKDROP` preset'inin yanında **`BACKDROP PATTERN`** (`DB.productPatterns` — 21 kalem: Smooth/Radial Gradient, Duotone Split, Stripes, Polka Dots, Grid, Halftone, Gingham, Marble Veining, Terrazzo, Noise/Grain, Organic Blob…) ve serbest metin **custom backdrop color** alanı (`pr_bgcolor_`, `pal_accent_` gibi) var. Renk ve preset birlikte `against a <bgcolor> <backdrop> background` cümlesine, pattern ayrı `the backdrop carrying a <pattern> pattern` cümlesine katkı verir; `None / Plain` ve boş alan hiçbir şey söylemez.
+
 ### Öneri motoru — [Apply]
 
 Kategori seçilince flavor satırının altında: `Suggested: Dark Field · black acrylic · reflection instead of shadow · 100mm macro · f/8 [Apply]`. `[Apply]` (`window.applyProductSetup`) altı `<select>`'i doldurur. Basılmazsa alanlar **unassigned kalır** (`''` = "hiçbir şey söyleme" kontratı).
@@ -70,7 +74,7 @@ Kategori seçilince flavor satırının altında: `Suggested: Dark Field · blac
 
 | Dosya | Değişiklik |
 |---|---|
-| `js/db.js` | `productCategories` (~40, 7 grup, her biri `{surface,size,flavor}`), `productLightSetups` (18, 3 grup), + `productSurfaces/Backdrops/ShotStyles/Finish/Shadow/Mood/Props/Sizes/Lens/Dof/Distance/LightChar` dizileri, + `productLightRecipes` / `productOpticsRecipes` tabloları |
+| `js/db.js` | `productCategories` (~40, 7 grup, her biri `{surface,size,flavor}`), `productLightSetups` (18, 3 grup), + `productSurfaces/Backdrops/Patterns/ShotStyles/Finish/Shadow/Mood/Props/Sizes/Lens/Dof/Distance/LightChar` dizileri, + `productLightRecipes` / `productOpticsRecipes` tabloları |
 | `js/productshot.js` | **YENİ** — `colorpalette.js` şekli: `buildProductShotHTML`, `findProductCategory`, `findProductLightSetup`, `recommendFor`, `updateProductFlavor`, `applyProductSetup`, `readProductShot`, `productShot/Light/Optics Phrase`, `productShotTags` |
 | `index.html` | `<script src="js/productshot.js">` (contentModules ↔ promptEngine arası) + SOURCE nav butonu |
 | `js/app.js` | `CATEGORIES.source.types` += `'productshot'`; `createNode` dalı (colorpalette şekli); `PRESETS.productPerfume` |

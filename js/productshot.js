@@ -24,6 +24,7 @@ const PRODUCT_FIELDS = [
     { key: 'size',      label: 'SIZE CLASS' },
     { key: 'surface',   label: 'SURFACE / TABLE' },
     { key: 'backdrop',  label: 'BACKDROP' },
+    { key: 'pattern',   label: 'BACKDROP PATTERN' },
     { key: 'lightchar', label: 'LIGHT QUALITY' },
     { key: 'shadow',    label: 'SHADOW' },
     { key: 'lens',      label: 'LENS' },
@@ -78,6 +79,8 @@ function buildProductShotHTML(id) {
         fieldHTML('SURFACE / TABLE', `pr_surface_${id}`, DB.productSurfaces),
         fieldHTML('BACKDROP', `pr_backdrop_${id}`, DB.productBackdrops)
     );
+    html += fieldHTML('BACKDROP PATTERN', `pr_pattern_${id}`, DB.productPatterns);
+    html += `<input type="text" class="obj-input" id="pr_bgcolor_${id}" placeholder="Custom backdrop color (e.g. dusty terracotta, #1b2a4a)" oninput="triggerUpdate()" style="margin-top:5px">`;
 
     html += sectionHTML('LIGHTING');
     html += `<div style="font-size:0.6rem; color:#666">SETUP</div>`;
@@ -227,6 +230,8 @@ function readProductShot(id) {
     v.light = lightEl ? lightEl.value : '';
     const nameEl = document.getElementById(`pr_name_${id}`);
     v.name = nameEl ? nameEl.value.trim() : '';
+    const bgEl = document.getElementById(`pr_bgcolor_${id}`);
+    v.bgcolor = bgEl ? bgEl.value.trim() : '';
     const noteEl = document.getElementById(`pr_note_${id}`);
     v.note = noteEl ? noteEl.value.trim() : '';
     return v;
@@ -243,7 +248,10 @@ function productShotPhrase(v) {
 
     const bits = [];
     if (v.surface) bits.push(`on ${prFirst(v.surface)}`);
-    if (v.backdrop) bits.push(`against a ${prFirst(v.backdrop)} background`);
+    const bg = [v.bgcolor ? v.bgcolor.toLowerCase() : '', v.backdrop ? prFirst(v.backdrop) : '']
+        .filter(Boolean).join(' ');
+    if (bg) bits.push(`against a ${bg} background`);
+    if (v.pattern && !/^none/i.test(v.pattern)) bits.push(`the backdrop carrying a ${prFirst(v.pattern)} pattern`);
     if (v.style) bits.push(`shot as ${prArticle(v.style)}`);
     if (v.finish && v.finish !== 'As-is / Natural') bits.push(prFirst(v.finish));
     if (v.mood) bits.push(`${prFirst(v.mood)} mood`);
@@ -297,6 +305,8 @@ function productShotTags(v) {
         v.size,
         v.surface,
         v.backdrop,
+        v.bgcolor ? v.bgcolor + ' backdrop' : '',
+        (v.pattern && !/^none/i.test(v.pattern)) ? v.pattern + ' pattern' : '',
         v.light,
         v.lightchar,
         v.shadow,

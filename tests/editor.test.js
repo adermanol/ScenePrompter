@@ -542,6 +542,8 @@ async function main() {
   doc.getElementById(`pal_preset_${palId}`).value = 'Teal & Orange';
   doc.getElementById(`pr_category_${prId}`).value = 'Wristwatch';
   doc.getElementById(`pr_mood_${prId}`).value = 'Tech & Futuristic';
+  doc.getElementById(`pr_pattern_${prId}`).value = 'Terrazzo Speckle';
+  doc.getElementById(`pr_bgcolor_${prId}`).value = 'dusty terracotta';
   const wsNew = window.serializeWorkspace();
   window.loadWorkspace(wsNew);
   await wait(50);
@@ -550,6 +552,8 @@ async function main() {
   check('colorpalette preset yüklendi', doc.getElementById(`pal_preset_${palId}`).value, 'Teal & Orange');
   check('productshot category yüklendi', doc.getElementById(`pr_category_${prId}`).value, 'Wristwatch');
   check('productshot mood yüklendi', doc.getElementById(`pr_mood_${prId}`).value, 'Tech & Futuristic');
+  check('productshot pattern yüklendi', doc.getElementById(`pr_pattern_${prId}`).value, 'Terrazzo Speckle');
+  check('productshot bgcolor yüklendi', doc.getElementById(`pr_bgcolor_${prId}`).value, 'dusty terracotta');
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);
