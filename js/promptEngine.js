@@ -148,6 +148,7 @@ function collectInputs(sid, nodes, cables) {
         render: null, shot: null, move: null, atmos: null, color: null, comp: null,
         neg: null, subjects: [], customLoc: null, positions: {}, materials: {},
         uiElements: [], graphicDesign: [], colorPalette: null, productShot: null,
+        assetPacks: [],
     };
     // Position and Material nodes are a special case. They don't connect to the stack,
     // they connect to the subject they modify. We must scan ALL cables.
@@ -183,6 +184,7 @@ function collectInputs(sid, nodes, cables) {
             case 'uielements': g.uiElements.push(n); break;
             case 'graphicdesign': g.graphicDesign.push(n); break;
             case 'productshot': g.productShot = n; break;
+            case 'assetpack': g.assetPacks.push(n); break;
         }
     });
     return g;
@@ -327,6 +329,7 @@ function buildComposition(g) {
     // clause exactly like a character or object would.
     g.uiElements.forEach(n => { const p = uiElementsPhrase(readUiElements(n.id)); if (p) sArr.push(p); });
     g.graphicDesign.forEach(n => { const p = graphicDesignPhrase(readGraphicDesign(n.id)); if (p) sArr.push(p); });
+    g.assetPacks.forEach(n => { const p = assetPackPhrase(readAssetPack(n.id)); if (p) sArr.push(p); });
     // A Product Shot's subject/set/style clause joins the frame contents too.
     if (g.productShot) { const p = productShotPhrase(readProductShot(g.productShot.id)); if (p) sArr.push(p); }
     if (sArr.length) { subj = sArr.join(' and '); act = aArr.join(' while '); }
@@ -505,6 +508,7 @@ function buildMidjourneyTags(c, g) {
     g.objects.forEach(o => add(val(`val_${o.id}`)));
     g.uiElements.forEach(n => uiElementsTags(readUiElements(n.id)).forEach(t => tags.push(t)));
     g.graphicDesign.forEach(n => graphicDesignTags(readGraphicDesign(n.id)).forEach(t => tags.push(t)));
+    g.assetPacks.forEach(n => assetPackTags(readAssetPack(n.id)).forEach(t => tags.push(t)));
     if (g.productShot) productShotTags(readProductShot(g.productShot.id)).forEach(t => tags.push(t));
     if (g.atmos) add(val(`atm_fx_${g.atmos.id}`));
     if (g.style) {

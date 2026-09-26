@@ -515,6 +515,63 @@ const DB = {
     gdPalette: ["Duotone", "High-Contrast B&W", "Pastel", "Corporate Brand Colors", "Riso-Print Limited Palette", "Neon / Vibrant", "Earthy / Organic", "Monochrome + Accent"],
     gdFinish: ["Matte Print", "Glossy Print", "Screen-Printed Texture", "Embossed / Foil-Stamped", "Risograph", "Digital-Flat", "Vintage Halftone", "Letterpress"],
 
+    // --- ASSET PACK (UI kits, icon sets, sticker packs, badges, patterns) ---
+    // A SET/collection of N visually-consistent small graphics — distinct from
+    // Graphic Design (one artifact) and UI Elements (one screen). The count and
+    // the consistency descriptors (line weight, corner style, color mode) are
+    // what make this a "pack" rather than a single image. optgroup+flavor picker,
+    // same shape as DB.stylePresets / DB.colorPalettes.
+    assetPackTypes: [
+        { key: 'uikit', label: 'UI Kit', items: [
+            { name: 'Mobile UI Component Kit', flavor: 'a cohesive set of mobile UI components — buttons, toggles, input fields, tab bars' },
+            { name: 'Web Dashboard Icon Kit', flavor: 'a matched set of dashboard navigation and action icons' },
+            { name: 'Cursor & Pointer Set', flavor: 'a set of cursor and pointer states for a desktop interface' },
+            { name: 'Loading & Progress Indicator Set', flavor: 'a set of loading spinners and progress indicators' },
+            { name: 'Onboarding Illustration Set', flavor: 'a set of onboarding-flow illustrations sharing one visual language' },
+        ]},
+        { key: 'icons', label: 'Icon Set', items: [
+            { name: 'Weather Icon Set', flavor: 'a matched set of weather condition icons' },
+            { name: 'Social Media Icon Set', flavor: 'a matched set of social platform icons' },
+            { name: 'File Type Icon Set', flavor: 'a matched set of file-type icons' },
+            { name: 'Productivity Tool Icon Set', flavor: 'a matched set of productivity and office tool icons' },
+            { name: 'Food & Drink Icon Set', flavor: 'a matched set of food and beverage icons' },
+            { name: 'Travel & Map Icon Set', flavor: 'a matched set of travel and map-pin icons' },
+            { name: 'Fitness & Health Icon Set', flavor: 'a matched set of fitness and health icons' },
+            { name: 'Finance & Payment Icon Set', flavor: 'a matched set of finance and payment icons' },
+            { name: 'Settings & Gear Icon Set', flavor: 'a matched set of settings and configuration icons' },
+        ]},
+        { key: 'stickers', label: 'Sticker Pack', items: [
+            { name: 'Kawaii Character Sticker Pack', flavor: 'a set of cute kawaii-style character stickers, consistent proportions' },
+            { name: 'Die-Cut Vinyl Sticker Sheet', flavor: 'a sheet of die-cut vinyl stickers with a bold white border on each' },
+            { name: 'Messaging App Sticker Pack', flavor: 'a set of expressive chat stickers sharing one mascot and palette' },
+            { name: 'Nature & Plant Sticker Set', flavor: 'a set of botanical stickers with a shared linework style' },
+            { name: 'Motivational Quote Sticker Set', flavor: 'a set of hand-lettered quote stickers sharing one type style' },
+            { name: 'Holographic Sticker Pack', flavor: 'a set of stickers with an iridescent holographic finish' },
+        ]},
+        { key: 'badges', label: 'Badge / Avatar / Profile', items: [
+            { name: 'Achievement Badge Set', flavor: 'a set of circular achievement/reward badges sharing one frame style' },
+            { name: 'Rank & Tier Badge Set', flavor: 'a set of rank badges forming a clear visual progression' },
+            { name: 'Avatar / Profile Icon Set', flavor: 'a set of profile avatar icons sharing one construction style' },
+            { name: 'Emoji Set', flavor: 'a set of expressive emoji faces sharing one shape language' },
+            { name: 'Mascot Expression Sheet', flavor: 'one mascot character drawn across a set of different expressions' },
+        ]},
+        { key: 'pattern', label: 'Pattern / Texture / Misc', items: [
+            { name: 'Seamless Pattern Set', flavor: 'a set of seamless repeating patterns sharing one palette' },
+            { name: 'Texture Swatch Set', flavor: 'a set of tileable surface texture swatches' },
+            { name: 'Brand Logo Lockup Set', flavor: 'a set of logo lockup variations (horizontal, stacked, icon-only) for one brand' },
+            { name: 'Game Item / Inventory Icon Set', flavor: 'a set of game inventory item icons sharing one render style' },
+            { name: 'NFT / Trait Layer Set', flavor: 'a set of generative trait-layer graphics sharing one construction grid' },
+        ]},
+    ],
+    assetPackCount: ["4", "6", "9", "12", "16", "20", "24", "36+"],
+    assetArtStyle: ["Flat Vector", "Line / Outline", "Duotone", "Gradient Modern", "3D Isometric", "Clay / Soft 3D", "Hand-Drawn Doodle", "Pixel Art", "Glassmorphic", "Neumorphic", "Kawaii Chibi", "Retro Badge", "Watercolor", "Risograph"],
+    assetLineWeight: ["Hairline", "Thin", "Medium", "Bold", "Duotone Fill + Line"],
+    assetCorner: ["Sharp / Square", "Slightly Rounded", "Fully Rounded", "Pill-Shaped", "Circular"],
+    assetColorMode: ["Single Color / Monochrome", "Two-Tone", "Full Color", "Brand Palette Match", "Pastel", "Neon / Vibrant", "Grayscale"],
+    assetBackground: ["Transparent (PNG)", "White Rounded Card", "Circle Badge Chip", "Square Tile", "Die-Cut White Border", "Solid Color Background"],
+    assetLayout: ["Grid Contact Sheet", "Individually Isolated", "Scattered Collage", "Single Row Strip"],
+    assetFinish: ["Flat Matte", "Glossy Sticker Coating", "Embossed / Debossed", "Glitter", "Foil Accent", "Vinyl Textured"],
+
     // --- PRODUCT SHOT ---
     // Studio product photography as a first-class module. Two research axes drive
     // the "setup tuned to the product" promise:

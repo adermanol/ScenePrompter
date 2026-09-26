@@ -536,6 +536,22 @@ async function main() {
   check('applyProductSetup: SHADOW dolduruldu',
     doc.getElementById(`pr_shadow_${prId}`).value, 'Reflection Instead of Shadow');
 
+  // Asset Pack node.
+  window.createNode('assetpack');
+  const apId = 'node_' + window.nodeIdCounter;
+  const apNode = window.nodes[apId];
+  check('assetpack var, kaynak yok/çıkış var', !apNode.el.querySelector('.socket-wrapper.in')
+    && !!apNode.el.querySelector('.socket-wrapper.out'), true);
+  check('assetpack kategorisi source', apNode.el.getAttribute('data-cat'), 'source');
+  check('assetpack alanları DOM\'da', !!doc.getElementById(`ap_type_${apId}`)
+    && !!doc.getElementById(`ap_count_${apId}`) && !!doc.getElementById(`ap_style_${apId}`)
+    && !!doc.getElementById(`ap_note_${apId}`), true);
+
+  doc.getElementById(`ap_type_${apId}`).value = 'Weather Icon Set';
+  window.updateAssetPackFlavor(apId);
+  check('updateAssetPackFlavor: flavor satırı dolduruldu',
+    doc.getElementById(`ap_flav_${apId}`).innerText.includes('weather condition icons'), true);
+
   // Save/Load roundtrip for the new node types.
   doc.getElementById(`ui_platform_${uiId}`).value = 'Smart TV';
   doc.getElementById(`gd_artifact_${gdId}`).value = 'Album Cover';
@@ -544,6 +560,8 @@ async function main() {
   doc.getElementById(`pr_mood_${prId}`).value = 'Tech & Futuristic';
   doc.getElementById(`pr_pattern_${prId}`).value = 'Terrazzo Speckle';
   doc.getElementById(`pr_bgcolor_${prId}`).value = 'dusty terracotta';
+  doc.getElementById(`ap_count_${apId}`).value = '16';
+  doc.getElementById(`ap_style_${apId}`).value = 'Kawaii Chibi';
   const wsNew = window.serializeWorkspace();
   window.loadWorkspace(wsNew);
   await wait(50);
@@ -554,6 +572,8 @@ async function main() {
   check('productshot mood yüklendi', doc.getElementById(`pr_mood_${prId}`).value, 'Tech & Futuristic');
   check('productshot pattern yüklendi', doc.getElementById(`pr_pattern_${prId}`).value, 'Terrazzo Speckle');
   check('productshot bgcolor yüklendi', doc.getElementById(`pr_bgcolor_${prId}`).value, 'dusty terracotta');
+  check('assetpack count yüklendi', doc.getElementById(`ap_count_${apId}`).value, '16');
+  check('assetpack style yüklendi', doc.getElementById(`ap_style_${apId}`).value, 'Kawaii Chibi');
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);

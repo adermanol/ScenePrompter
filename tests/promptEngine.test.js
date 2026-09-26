@@ -732,5 +732,44 @@ eq('findProductLightSetup: known name resolves flavor',
   typeof findProductLightSetup('Dark Field').flavor, 'string');
 eq('findProductLightSetup: unknown returns null', findProductLightSetup('Nope'), null);
 
+// ---------------------------------------------------------------------------
+// 18. ASSET PACK MODULE
+// ---------------------------------------------------------------------------
+console.log('\n=== Asset Pack ===');
+
+const apNodes = { s: nodes.s, ap: { id: 'ap', type: 'assetpack', el: { style: { left: '0px' } } } };
+const apCables = [{ from: 'ap', to: 's' }];
+const apFields = ['theme', 'count', 'style', 'lineweight', 'corner', 'color', 'bg', 'layout', 'finish', 'note'];
+set('ap_type_ap', 'Weather Icon Set');
+set('ap_theme_ap', 'cozy autumn');
+set('ap_count_ap', '12');
+set('ap_style_ap', 'Line / Outline');
+set('ap_lineweight_ap', 'Bold');
+set('ap_corner_ap', 'Fully Rounded');
+set('ap_color_ap', 'Two-Tone');
+set('ap_bg_ap', 'Transparent (PNG)');
+set('ap_layout_ap', 'Grid Contact Sheet');
+set('ap_finish_ap', 'Flat Matte');
+set('ap_note_ap', 'hand-drawn linework');
+
+eq('asset pack: full phrase becomes the subject clause',
+  stack('s', 'runway', apNodes, apCables),
+  'a set of 12 cozy autumn a matched set of weather condition icons, line style, bold lines, fully rounded corners,'
+  + ' two-tone palette, transparent (png), arranged as a grid contact sheet, flat matte finish, hand-drawn linework.');
+
+eq('asset pack: midjourney tags', stack('s', 'midjourney', apNodes, apCables),
+  'Weather Icon Set, cozy autumn, 12, Line / Outline, Bold, Fully Rounded, Two-Tone, Transparent (PNG),'
+  + ' Grid Contact Sheet, Flat Matte, hand-drawn linework');
+
+eq('findAssetPackType: known name resolves flavor',
+  typeof findAssetPackType('Weather Icon Set').flavor, 'string');
+eq('findAssetPackType: unknown returns null', findAssetPackType('Nope'), null);
+
+apFields.concat(['type']).forEach(f => set(`ap_${f}_ap`, ''));
+eq('unassigned asset pack: no cinematic clause',
+  stack('s', 'runway', apNodes, apCables), 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
+eq('unassigned asset pack: no dangling tags',
+  stack('s', 'midjourney', apNodes, apCables), 'Connect nodes to generate Midjourney tags.');
+
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);

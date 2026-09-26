@@ -140,7 +140,7 @@ const UNSET_LABEL = '— unassigned';
 // creates can never disagree about what colour they are.
 // ---------------------------------------------------------------------------
 const CATEGORIES = {
-    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render', 'uielements', 'graphicdesign', 'productshot'] },
+    source:  { label: 'SOURCE',  types: ['scene', 'customloc', 'style', 'render', 'uielements', 'graphicdesign', 'productshot', 'assetpack'] },
     subject: { label: 'SUBJECT', types: ['character', 'object'] },   // + registry subjects
     light:   { label: 'LIGHT',   types: ['light', 'atmos'] },
     camera:  { label: 'CAMERA',  types: ['camera', 'shot', 'cammove', 'position'] },
@@ -504,6 +504,11 @@ window.createNode = function(type) {
         hasIn = false; hasOut = true; title = "PRODUCT SHOT";
         content = buildProductShotHTML(id);
         setTimeout(() => { if(window.updateProductFlavor) window.updateProductFlavor(id); }, 0);
+    }
+    else if (type === 'assetpack') {
+        hasIn = false; hasOut = true; title = "ASSET PACK";
+        content = buildAssetPackHTML(id);
+        setTimeout(() => { if(window.updateAssetPackFlavor) window.updateAssetPackFlavor(id); }, 0);
     }
     else if (type === 'position') {
         hasIn = true; hasOut = true; title = "POSITION";
@@ -1746,8 +1751,11 @@ window.initThreePreview = function(id) {
     const camera = new THREE.PerspectiveCamera(50, container.clientWidth/container.clientHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
     const labelContainer = document.createElement('div');
@@ -1770,11 +1778,22 @@ window.initThreePreview = function(id) {
     floor.receiveShadow = true;
     scene.add(floor);
 
+    // Base fill so a scene with no Light node connected is never pitch black —
+    // every SUBJECTS mesh uses MeshStandardMaterial (js/subjects.js), which is
+    // physically lit and renders fully black with zero light sources. Kept
+    // deliberately dim: a connected Light/Sun node's PointLight/DirectionalLight
+    // (intensity 1.0-2.0+, updateThreePreview) still dominates the look.
+    scene.add(new THREE.HemisphereLight(0xbfd6ff, 0x2a2a2a, 0.55));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+
     camera.position.set(0, 50, 150);
     camera.lookAt(0,0,0);
 
     const orbit = new THREE.OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
+    orbit.minDistance = 20;
+    orbit.maxDistance = 500;
+    orbit.maxPolarAngle = Math.PI * 0.51;   // stops just past the horizon, not a full flip under the floor
 
     // --- through-the-lens view (hidden until toggled) ---
     const ttlBox = document.getElementById(`ttl_${id}`);
@@ -1783,6 +1802,9 @@ window.initThreePreview = function(id) {
     if(ttlBox) {
         ttlRenderer = new THREE.WebGLRenderer({ antialias: true });
         ttlRenderer.setSize(ttlBox.clientWidth || 300, ttlBox.clientHeight || 180);
+        ttlRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        ttlRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+        ttlRenderer.toneMappingExposure = 1.0;
         ttlBox.appendChild(ttlRenderer.domElement);
     }
 
