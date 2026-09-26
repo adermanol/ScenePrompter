@@ -4,6 +4,15 @@
 **Sürüm:** main @ db71b12 üzerinden analiz  
 **Durum:** Faz 0 ✅ · Faz 1 ✅ (6/7) · Faz 2 🚧 · **Faz 3 ✅** · **Faz 4 ✅** · Faz 7 kısmen ✅
 
+> **27.09 güncelleme notu:** Bu dosya Temmuz'dan beri güncellenmedi ve aşağıdaki
+> "Mevcut durum" listesindeki birkaç ❌ artık yanlış — düzeltildi (bkz. satır
+> içi notlar). Tam, tarihli bir kod-tabanı taraması için
+> `docs/PROJECT_ANALYSIS_2026-09.md`'ye bakın; oradaki bulgulardan doğan
+> düzeltmeler (sw.js, README, CI, nav/erişilebilirlik) ve yeni modüller
+> (Product Shot, Asset Pack, Sound Design, 3D önizleme ışık düzeltmesi) o
+> tarihten sonra tamamlandı. Aşağıdaki faz içeriği tarihsel bir kayıt olarak
+> olduğu gibi bırakıldı.
+
 > **İlerleme notu (17.07):** Faz 0 ve Faz 1'in çoğu bitti. Faz 7'nin test altyapısı
 > ve node registry maddeleri, hata avı ve node dalgası gerektirdiği için plandan
 > öne çekildi. Aşağıdaki fazlarda ✅ işaretli maddeler tamamlandı.
@@ -22,21 +31,31 @@ ScenePrompter, node tabanlı sinematik AI video prompt üretiminde sağlam bir �
 2. **İçerik derinliği** — node çeşitliliği ve prompt kalitesi
 3. **Üretim döngüsü** — gerçek API entegrasyonu
 
-### Mevcut durum (17.07 itibarıyla)
+### Mevcut durum (17.07 itibarıyla — ❌ satırları 27.09'da düzeltildi, bkz. yukarıdaki not)
 - ✅ **28 node tipi** — 7'si registry'den: Quadruped, Insect, Flying, Vehicle,
   Crowd, Aquatic, VFX (+ Custom Location)
+  **[27.09: artık 33+ — Material, Color Palette, UI Elements, Graphic Design,
+  Product Shot, Asset Pack, Sound Design eklendi.]**
 - ✅ **9 hedef platform** — Runway, Kling, Veo, Luma, Midjourney + Sora, Pika,
   Hailuo, Generic
 - ✅ **3D: through-the-lens + sürükle-konumlandır + gölgeler + hareket önizleme**
+  **[27.09: hiç Light node'u bağlanmadan sahnedeki her mesh'in tamamen siyah
+  render olduğu bir hata bulunup düzeltildi — bkz. PROJECT_ANALYSIS_2026-09.md.]**
 - ✅ **Undo/Redo** (50 adım) + çoklu seçim + hızlı ekleme paleti
 - ✅ **Otomatik test** — `npm test`, 190+ assertion, jsdom
+  **[27.09: 380+ assertion.]**
 - ✅ **Node registry** — yeni özne node'u = 1 dosya (6 değil)
 - ✅ **Prompt lint + karakter sayacı + JSON export + A/B/C varyantlar**
-- ✅ **2 çalışan preset** (Cyberpunk, Noir)
-- ❌ Çoklu kayıt slotu — Faz 5
-- ❌ Gerçek API entegrasyonu — Faz 6
-- ❌ Çevrimdışı (CDN bağımlılığı sürüyor) — tek kalan Faz 0 maddesi
-- ❌ DOM = state — Faz 7.2
+- ✅ **2 çalışan preset** (Cyberpunk, Noir) **[27.09: artık 4 — Product—Perfume
+  Dark Field, Brand Kit eklendi.]**
+- ❌ Çoklu kayıt slotu — Faz 5 **[27.09: hâlâ tek `localStorage` anahtarı, hâlâ açık]**
+- ❌ Gerçek API entegrasyonu — Faz 6 **[27.09: kısmen — `backend/` bir Higgsfield
+  CLI köprüsü olarak var, ama bu tam "Faz 6" API konnektör vizyonu değil]**
+- ❌ ~~Çevrimdışı (CDN bağımlılığı sürüyor)~~ **[27.09: YAPILDI — three.js/fontlar
+  yerelleştirildi, gerçek bir PWA + service worker var (`9b00397`); sw.js'in
+  kendi bayat cache listesi + yanlış fetch fallback'i 27.09'da ayrıca düzeltildi]**
+- ❌ DOM = state — Faz 7.2 **[27.09: hâlâ açık — `js/app.js` 2700+ satır, tek
+  dosya; bu geçişin kapsamı dışı bırakıldı, bkz. PROJECT_ANALYSIS_2026-09.md]**
 
 ---
 

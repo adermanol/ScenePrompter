@@ -148,7 +148,7 @@ function collectInputs(sid, nodes, cables) {
         render: null, shot: null, move: null, atmos: null, color: null, comp: null,
         neg: null, subjects: [], customLoc: null, positions: {}, materials: {},
         uiElements: [], graphicDesign: [], colorPalette: null, productShot: null,
-        assetPacks: [],
+        assetPacks: [], soundDesign: null,
     };
     // Position and Material nodes are a special case. They don't connect to the stack,
     // they connect to the subject they modify. We must scan ALL cables.
@@ -185,6 +185,7 @@ function collectInputs(sid, nodes, cables) {
             case 'graphicdesign': g.graphicDesign.push(n); break;
             case 'productshot': g.productShot = n; break;
             case 'assetpack': g.assetPacks.push(n); break;
+            case 'sounddesign': g.soundDesign = n; break;
         }
     });
     return g;
@@ -319,6 +320,10 @@ function buildComposition(g) {
         if (a) aArr.push(a);
         (def.audio ? def.audio(v) : []).forEach(x => { audio += x + ', '; });
     });
+    if (g.soundDesign) {
+        const sd = soundDesignPhrase(readSoundDesign(g.soundDesign.id));
+        if (sd) audio += sd + ', ';
+    }
 
     if (g.objects.length) {
         sArr.push(...g.objects.map(o => val(`val_${o.id}`)).filter(v => v && v.trim()));

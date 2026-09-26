@@ -24,7 +24,7 @@ window.localStorage.clear();
 
 // One eval so the files share scope, exactly like real <script> tags do
 // (db.js declares `const DB` at top level — separate evals would hide it).
-const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/productshot.js', 'js/promptEngine.js', 'js/app.js']
+const src = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/productshot.js', 'js/sounddesign.js', 'js/promptEngine.js', 'js/app.js']
   .map(f => fs.readFileSync(`${ROOT}/${f}`, 'utf8')).join('\n;\n');
 // `const` bindings live in the global lexical scope, not on `window` — re-export
 // the ones the tests need to reach.
@@ -552,6 +552,16 @@ async function main() {
   check('updateAssetPackFlavor: flavor satırı dolduruldu',
     doc.getElementById(`ap_flav_${apId}`).innerText.includes('weather condition icons'), true);
 
+  // Sound Design node.
+  window.createNode('sounddesign');
+  const sndId = 'node_' + window.nodeIdCounter;
+  const sndNode = window.nodes[sndId];
+  check('sounddesign var, kaynak yok/çıkış var', !sndNode.el.querySelector('.socket-wrapper.in')
+    && !!sndNode.el.querySelector('.socket-wrapper.out'), true);
+  check('sounddesign kategorisi grade', sndNode.el.getAttribute('data-cat'), 'grade');
+  check('sounddesign alanları DOM\'da', !!doc.getElementById(`snd_genre_${sndId}`)
+    && !!doc.getElementById(`snd_tempo_${sndId}`) && !!doc.getElementById(`snd_note_${sndId}`), true);
+
   // Save/Load roundtrip for the new node types.
   doc.getElementById(`ui_platform_${uiId}`).value = 'Smart TV';
   doc.getElementById(`gd_artifact_${gdId}`).value = 'Album Cover';
@@ -562,6 +572,8 @@ async function main() {
   doc.getElementById(`pr_bgcolor_${prId}`).value = 'dusty terracotta';
   doc.getElementById(`ap_count_${apId}`).value = '16';
   doc.getElementById(`ap_style_${apId}`).value = 'Kawaii Chibi';
+  doc.getElementById(`snd_genre_${sndId}`).value = 'Jazz Noir';
+  doc.getElementById(`snd_mix_${sndId}`).value = 'ASMR Close-Mic';
   const wsNew = window.serializeWorkspace();
   window.loadWorkspace(wsNew);
   await wait(50);
@@ -574,6 +586,8 @@ async function main() {
   check('productshot bgcolor yüklendi', doc.getElementById(`pr_bgcolor_${prId}`).value, 'dusty terracotta');
   check('assetpack count yüklendi', doc.getElementById(`ap_count_${apId}`).value, '16');
   check('assetpack style yüklendi', doc.getElementById(`ap_style_${apId}`).value, 'Kawaii Chibi');
+  check('sounddesign genre yüklendi', doc.getElementById(`snd_genre_${sndId}`).value, 'Jazz Noir');
+  check('sounddesign mix yüklendi', doc.getElementById(`snd_mix_${sndId}`).value, 'ASMR Close-Mic');
 
   console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
   process.exit(failures === 0 ? 0 : 1);

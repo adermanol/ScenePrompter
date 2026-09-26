@@ -136,6 +136,13 @@ select, input[type="text"], input[type="number"], textarea {
     color: var(--accent); padding: 10px; font-family: 'JetBrains Mono', monospace;
     font-size: 0.8rem; border-radius: 6px; outline: none; min-height: 36px;
 }
+/* outline:none above hides the ugly default ring from a mouse click, but a
+   keyboard/switch-access user tabbing through a node had NO way to see which
+   field they were on. :focus-visible only fires for keyboard focus, so the
+   mouse-click case above is untouched. */
+select:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+}
 .stack-output {
     flex: 1;
     min-height: 80px;
@@ -234,6 +241,15 @@ input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; hei
     padding: 4px 0;
 }
 .top-nav::-webkit-scrollbar { display: none; }
+/* Signals "there's more, scroll me" — the nav now holds enough node types
+   (SOURCE alone has 8) that the right edge silently clips buttons with no
+   indication a scrollbar exists. JS (initNavOverflowHint, app.js) toggles this
+   class off once actually scrolled to the end, so the fade always matches
+   real scroll position instead of guessing. */
+.top-nav.has-more {
+    mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent 100%);
+}
 .nav-sep { width: 1px; height: 22px; background: rgba(255,255,255,0.1); flex-shrink: 0; }
 
 .nav-btn {

@@ -144,7 +144,7 @@ const CATEGORIES = {
     subject: { label: 'SUBJECT', types: ['character', 'object'] },   // + registry subjects
     light:   { label: 'LIGHT',   types: ['light', 'atmos'] },
     camera:  { label: 'CAMERA',  types: ['camera', 'shot', 'cammove', 'position'] },
-    grade:   { label: 'GRADE',   types: ['colorg', 'colorpalette', 'comp', 'preview', 'material'] },
+    grade:   { label: 'GRADE',   types: ['colorg', 'colorpalette', 'comp', 'preview', 'material', 'sounddesign'] },
     output:  { label: 'OUTPUT',  types: ['stack', 'sequence', 'neg'] },
 };
 
@@ -509,6 +509,10 @@ window.createNode = function(type) {
         hasIn = false; hasOut = true; title = "ASSET PACK";
         content = buildAssetPackHTML(id);
         setTimeout(() => { if(window.updateAssetPackFlavor) window.updateAssetPackFlavor(id); }, 0);
+    }
+    else if (type === 'sounddesign') {
+        hasIn = false; hasOut = true; title = "SOUND DESIGN";
+        content = buildSoundDesignHTML(id);
     }
     else if (type === 'position') {
         hasIn = true; hasOut = true; title = "POSITION";
@@ -1298,6 +1302,27 @@ const PRESETS = {
             { type: 'colorg', x: 480, y: 460, values: {
                 col_con: 'Punchy', col_sat: 'Rich' } },
             { type: 'stack', x: 860, y: 260 },
+        ],
+        connect: [[0, 3], [1, 3], [2, 3]],
+    },
+    brandKit: {
+        label: 'Brand Kit — UI + Icons + Palette',
+        nodes: [
+            // Showcases three newer modules together: a UI screen, a matched
+            // icon set, and the palette tying both to one brand identity.
+            { type: 'uielements', x: 100, y: 100, values: {
+                ui_platform: 'Mobile App', ui_screen: 'Dashboard / Home',
+                ui_lang: 'Material Design', ui_color: 'Light Mode',
+                ui_density: 'Card-Based Grid' } },
+            { type: 'assetpack', x: 100, y: 460, values: {
+                ap_type: 'Mobile UI Component Kit', ap_theme: 'fintech app',
+                ap_count: '12', ap_style: 'Flat Vector', ap_corner: 'Fully Rounded',
+                ap_color: 'Brand Palette Match', ap_bg: 'Transparent (PNG)',
+                ap_layout: 'Grid Contact Sheet', ap_finish: 'Flat Matte' } },
+            { type: 'colorpalette', x: 480, y: 280, values: {
+                pal_preset: 'Duotone Blue', pal_dominance: 'Cool-Dominant',
+                pal_saturation: 'Natural' } },
+            { type: 'stack', x: 860, y: 280 },
         ],
         connect: [[0, 3], [1, 3], [2, 3]],
     },
@@ -2717,9 +2742,27 @@ function maybeOnboard() {
     card.querySelector('.ob-ok').addEventListener('pointerdown', dismiss);
 }
 
+// Fades the nav's right edge whenever it's scrolled somewhere other than the
+// end, so a scrollable-but-clipped nav (SOURCE alone now has 8 node types) is
+// never mistaken for "that's everything". Re-checked on scroll/resize so it
+// always reflects real position rather than a static guess.
+function initNavOverflowHint() {
+    const nav = document.querySelector('.top-nav');
+    if(!nav) return;
+    const sync = () => {
+        const moreToScroll = nav.scrollWidth > nav.clientWidth + 2
+            && (nav.scrollLeft + nav.clientWidth) < nav.scrollWidth - 2;
+        nav.classList.toggle('has-more', moreToScroll);
+    };
+    nav.addEventListener('scroll', sync, { passive: true });
+    window.addEventListener('resize', sync);
+    sync();
+}
+
 window.onload = () => {
     buildSubjectNav();
     buildPresetMenu();
+    initNavOverflowHint();
     // Choosing a file action closes the phone overflow popover behind the modal.
     const fa = document.getElementById('file-actions');
     if(fa) fa.addEventListener('pointerdown', e => {

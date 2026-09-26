@@ -14,7 +14,7 @@ global.localStorage = { getItem: () => null, setItem: () => {} };
 // subjects.js defines the SUBJECTS registry that updateStack() reads from.
 // Function declarations leak out of a direct eval, but `const` bindings do not —
 // hence the explicit re-export of the const-declared registry and data tables.
-const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/productshot.js', 'js/promptEngine.js']
+const SRC = ['js/db.js', 'js/subjects.js', 'js/materials.js', 'js/colorpalette.js', 'js/contentModules.js', 'js/productshot.js', 'js/sounddesign.js', 'js/promptEngine.js']
   .map(f => fs.readFileSync('c:/Works/Projects/ScenePrompter/' + f, 'utf8'))
   .join('\n;\n');
 eval(SRC + '\n;globalThis.SUBJECTS = SUBJECTS;'
@@ -770,6 +770,64 @@ eq('unassigned asset pack: no cinematic clause',
   stack('s', 'runway', apNodes, apCables), 'Connect Scene, Style, or Character nodes to generate a cinematic prompt.');
 eq('unassigned asset pack: no dangling tags',
   stack('s', 'midjourney', apNodes, apCables), 'Connect nodes to generate Midjourney tags.');
+
+// ---------------------------------------------------------------------------
+// 19. SOUND DESIGN MODULE
+// ---------------------------------------------------------------------------
+console.log('\n=== Sound Design ===');
+
+// soundDesignPhrase is a pure function — test it directly first (the `audio`
+// clause is only reachable through the platform build() functions that use
+// it, and updateStack's EMPTY_PROSE gate checks c.subj/c.env, not c.audio, so
+// a Sound-Design-only graph alone can never prove the clause reached a
+// platform's output — it needs a subject/env in the graph too, below).
+eq('soundDesignPhrase: full sentence', soundDesignPhrase({
+  genre: 'Synthwave Electronic', tempo: 'Walking (Moderato, ~110 BPM)',
+  instrumentation: 'Synth Pads & Arps', ambient: 'City Traffic Hum',
+  sfx: 'Door Creak', diegetic: 'Score Ducking Under Dialogue',
+  mix: 'Wide Cinematic Soundstage', note: 'synth pulse on downbeats',
+}), 'a synthwave electronic score at a walking tempo, featuring synth pads & arps,'
+  + ' city traffic hum in the background, door creak accents, score ducking under dialogue,'
+  + ' mixed wide cinematic soundstage, synth pulse on downbeats');
+
+eq('soundDesignPhrase: "Silence / No Score" branch, no contradiction',
+  soundDesignPhrase({ genre: 'Silence / No Score', tempo: 'Frantic (Presto, ~180+ BPM)', ambient: 'Empty Room Tone' }),
+  'complete silence, no score, just empty room tone in the background');
+
+eq('soundDesignPhrase: unassigned returns empty string', soundDesignPhrase({}), '');
+
+eq('soundDesignTags', soundDesignTags({
+  genre: 'Jazz Noir', tempo: 'Slow (Adagio, ~65 BPM)', instrumentation: 'Brass Section',
+  ambient: '', sfx: '', diegetic: '', mix: '', note: '',
+}), ['Jazz Noir', 'Slow (Adagio, ~65 BPM)', 'Brass Section']);
+eq('soundDesignTags: unassigned returns []', soundDesignTags({}), []);
+
+// End-to-end: a Sound Design node paired with a Scene (so c.env is non-empty
+// and the graph clears EMPTY_PROSE's gate) reaches Veo's "Audio: ..." line.
+const sndNodes = { s: nodes.s, sc: pf.sc, snd: { id: 'snd', type: 'sounddesign', el: { style: { left: '0px' } } } };
+const sndCables = [{ from: 'sc', to: 's' }, { from: 'snd', to: 's' }];
+set('snd_genre_snd', 'Synthwave Electronic');
+set('snd_tempo_snd', 'Walking (Moderato, ~110 BPM)');
+set('snd_instrumentation_snd', 'Synth Pads & Arps');
+set('snd_ambient_snd', 'City Traffic Hum');
+set('snd_sfx_snd', 'Door Creak');
+set('snd_diegetic_snd', 'Score Ducking Under Dialogue');
+set('snd_mix_snd', 'Wide Cinematic Soundstage');
+set('snd_note_snd', '');
+
+const veoOut = stack('s', 'veo', sndNodes, sndCables);
+eq('sound design: audio clause reaches Veo output',
+  veoOut.includes('Audio: a synthwave electronic score at a walking tempo'), true);
+
+// Deliberately never wired into Midjourney tags (a still-image platform has no
+// place for a purely audio concept — same reasoning as Light nodes).
+const sndMjOut = stack('s', 'midjourney', sndNodes, sndCables);
+eq('sound design: does NOT leak into Midjourney tags',
+  sndMjOut.toLowerCase().includes('synthwave'), false);
+
+['genre', 'tempo', 'instrumentation', 'ambient', 'sfx', 'diegetic', 'mix', 'note'].forEach(f => set(`snd_${f}_snd`, ''));
+eq('unassigned sound design: Veo output has no Audio line',
+  stack('s', 'veo', sndNodes, sndCables).includes('Audio:'), false);
 
 console.log(`\n${failures === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${failures} TEST BAŞARISIZ`}`);
 process.exit(failures === 0 ? 0 : 1);

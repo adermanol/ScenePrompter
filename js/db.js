@@ -698,4 +698,19 @@ const DB = {
         large:     { lens: '50mm Standard',  dof: 'f/11 — Sharp',                   dist: 'Far (~3m)' },
         oversized: { lens: '24mm Wide (tilt-shift)', dof: 'f/8 — Balanced',         dist: 'Very far (~6m+)' },
     },
+
+    // --- SOUND DESIGN ---
+    // Fills a gap that was already fully plumbed: buildComposition's `audio`
+    // clause is consumed by Kling/Veo/Sora and the JSON export (js/promptEngine.js),
+    // but nothing let a user deliberately author it — only a few SUBJECTS audio()
+    // hooks and two hardcoded weather/action heuristics fed it. Tempo labels pair
+    // real Italian tempo markings with an approximate BPM range; diegetic/
+    // non-diegetic is genuine film sound-design vocabulary, not invented.
+    sndGenre: ["Orchestral Cinematic", "Minimalist Piano", "Synthwave Electronic", "Tense Strings", "Ambient Drone", "Epic Trailer", "Lo-fi Chillhop", "Traditional Ethnic", "Jazz Noir", "Choral Sacred", "Industrial Glitch", "Acoustic Folk", "8-bit Chiptune", "Silence / No Score"],
+    sndTempo: ["Very Slow (Largo, ~50 BPM)", "Slow (Adagio, ~65 BPM)", "Moderate (Andante, ~90 BPM)", "Walking (Moderato, ~110 BPM)", "Upbeat (Allegro, ~130 BPM)", "Fast (Vivace, ~160 BPM)", "Frantic (Presto, ~180+ BPM)"],
+    sndInstrumentation: ["Full Orchestra", "Solo Piano", "String Quartet", "Synth Pads & Arps", "Taiko & Percussion", "Acoustic Guitar", "Brass Section", "Choir", "808s & Bass", "Music Box", "Didgeridoo & World", "Distorted Electric Guitar"],
+    sndAmbient: ["City Traffic Hum", "Forest Birdsong", "Ocean Waves", "Rain on Windows", "Crowd Murmur", "Wind Howling", "Machinery Drone", "Campfire Crackle", "Underwater Muffle", "Empty Room Tone", "Space Vacuum Silence"],
+    sndSfx: ["Footsteps on Gravel", "Glass Shattering", "Door Creak", "Gunshot Crack", "Thunder Clap", "Whoosh Transition", "Heartbeat Pulse", "Camera Shutter Click", "Radio Static", "Sword Clash"],
+    sndDiegetic: ["Fully Diegetic (in-world only)", "Non-Diegetic Score Only", "Score Ducking Under Dialogue", "Score Swells at Climax"],
+    sndMix: ["Intimate & Close", "Wide Cinematic Soundstage", "Muffled / Distant", "Distorted / Lo-fi", "Crystal Clear Studio", "Bass-Heavy Rumble", "ASMR Close-Mic"],
 };
